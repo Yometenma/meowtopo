@@ -92,6 +92,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/devices", s.createDevice)
 	m.HandleFunc("GET /api/devices/{id}", s.getDevice)
 	m.HandleFunc("PATCH /api/devices/{id}", s.patchDevice)
+	m.HandleFunc("DELETE /api/devices/{id}", s.deleteDevice)
 	m.HandleFunc("POST /api/devices/{id}/ping", s.pingDevice)
 	m.HandleFunc("POST /api/devices/{id}/hide", s.visibility(true))
 	m.HandleFunc("POST /api/devices/{id}/unhide", s.visibility(false))
@@ -222,6 +223,34 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 	s.events.Emit("device_updated", d)
 	jsonOut(w, 200, d)
 }
+func (s *Server) deleteDevice(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		fail(w, 400, "invalid_id", "设备编号无效")
+		return
+	}
+	d, err := s.store.device(id)
+	if err != nil {
+		fail(w, 404, "not_found", "设备不存在")
+		return
+	}
+	if !d.Manual {
+		fail(w, 409, "automatic_device", "自动发现的设备不能删除，可以隐藏或忽略")
+		return
+	}
+	result, err := s.store.db.Exec(`DELETE FROM devices WHERE id=? AND created_manually=1`, id)
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	deleted, _ := result.RowsAffected()
+	if deleted == 0 {
+		fail(w, 404, "not_found", "设备不存在")
+		return
+	}
+	s.events.Emit("device_deleted", map[string]int64{"device_id": id})
+	jsonOut(w, 200, map[string]bool{"deleted": true})
+}
 func safeType(v string) string {
 	v = strings.ToLower(strings.TrimSpace(v))
 	allowed := map[string]bool{"unknown": true, "internet": true, "modem": true, "gateway": true, "router": true, "ap": true, "switch": true, "nas": true, "linux": true, "windows": true, "macos": true, "phone": true, "tablet": true, "tv": true, "camera": true, "iot": true, "game": true, "printer": true, "room": true}
@@ -289,7 +318,7 @@ func (s *Server) connection(w http.ResponseWriter, r *http.Request) {
 		ConnectionType string `json:"connection_type"`
 		PortLabel      string `json:"port_label"`
 	}
-	if e != nil || decode(r, &v) != nil || v.ParentID <= 0 || v.ParentID == id {
+	if e != nil || decode(r, &v) != nil || v.ParentID < 0 || v.ParentID == id {
 		fail(w, 400, "invalid_request", "父设备或连接信息无效")
 		return
 	}
@@ -302,7 +331,7 @@ func (s *Server) connection(w http.ResponseWriter, r *http.Request) {
 	if e == nil {
 		_, e = tx.Exec(`DELETE FROM connections WHERE target_device_id=?`, id)
 	}
-	if e == nil {
+	if e == nil && v.ParentID > 0 {
 		_, e = tx.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,port_label,source_type,confidence,user_confirmed,created_at,updated_at)VALUES(?,?,?,?, 'manual',1,1,?,?)`, v.ParentID, id, v.ConnectionType, strings.TrimSpace(v.PortLabel), now(), now())
 	}
 	if e == nil {
