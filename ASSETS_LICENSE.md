@@ -1,6 +1,6 @@
 # 角色美术资源授权
 
-`internal/app/web/assets/topo-chan.png` 是 Topo酱的用户提供正式视觉参考与第一版展示素材。
+`internal/app/web/assets/topo-chan.png` 是 Topo酱的用户提供正式视觉参考与第一版展示素材。`internal/app/web/assets/devices/` 中的设备分类插图同样由用户提供，属于 Topo酱角色美术资源。
 
 该文件不属于本仓库 MIT 许可证的授权范围；在权利人另行明确许可前，版权与所有相关权利保留。代码贡献许可与角色美术的转载、修改、二次创作许可相互独立。第三方不得仅因取得本仓库代码而推定获得角色素材的使用许可。
 
