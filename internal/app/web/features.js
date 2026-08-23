@@ -234,6 +234,12 @@ renderManager = function () {
   });
 };
 
+const originalManagerOpen = openManager;
+openManager = function () {
+  originalManagerOpen();
+  document.querySelector('#managerDialog').scrollTop = 0;
+};
+
 const originalManagerAction = managerAction;
 managerAction = async function (button) {
   if (button.dataset.action !== 'attention') return originalManagerAction(button);
@@ -265,6 +271,12 @@ bind = function () {
   ensureMaintenanceUI();
   originalBind();
   ensureDashboardChrome();
+  document.querySelector('#aboutTab').onclick = async () => {
+    showPane('about');
+    const result = await api('/api/version');
+    const value = result.version || 'dev';
+    document.querySelector('#versionText').textContent = value.startsWith('dev-') ? `开发版 · ${value.slice(4)}` : value === 'dev' ? '开发版 · 本地构建' : `版本 ${value}`;
+  };
   const overview = document.querySelector('#overviewNav');
   const navPages = [
     [document.querySelector('#manageBtn'), document.querySelector('#managerClose')],

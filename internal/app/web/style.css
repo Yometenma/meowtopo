@@ -61,8 +61,9 @@ html.dark .dashboard-shell .canvas-page{box-shadow:0 18px 55px #0004,inset 0 1px
 .dashboard-shell #managerDialog::backdrop,.dashboard-shell #activityDialog::backdrop,.dashboard-shell #settingsDialog::backdrop,.dashboard-shell #accountDialog::backdrop{background:transparent;backdrop-filter:none}
 .dashboard-shell #managerDialog,.dashboard-shell #activityDialog,.dashboard-shell #accountDialog{padding:28px max(28px,calc((100vw - var(--sidebar) - 1120px)/2));overflow:auto}
 .dashboard-shell #settingsDialog>form{width:min(860px,100%);min-height:100%;margin:auto;padding:28px 34px;overflow:visible}
-.dashboard-shell #managerDialog>.manager-head,.dashboard-shell #activityDialog>.manager-head,.dashboard-shell #accountDialog>.manager-head{top:-28px;margin:-28px 0 18px;padding:27px 0 17px;background:color-mix(in srgb,var(--bg) 93%,transparent)}
-.dashboard-shell #managerDialog .manager-filters{top:76px;background:var(--bg)}
+.dashboard-shell #managerDialog>.manager-head,.dashboard-shell #activityDialog>.manager-head,.dashboard-shell #accountDialog>.manager-head{top:-28px;margin:-28px 0 18px;padding:27px 0 17px;background:var(--bg)}
+.dashboard-shell #managerDialog>.manager-head{margin-bottom:0}
+.dashboard-shell #managerDialog .manager-filters{top:72px;margin-top:0;background:var(--bg);box-shadow:0 10px 18px var(--bg)}
 .page-kicker{display:block;margin-bottom:3px;color:var(--mint);font-size:10px;font-weight:800;letter-spacing:.13em}
 .activity-overview{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:2px 0 14px}.activity-overview span{display:grid;padding:13px 15px;border:1px solid var(--line);border-radius:13px;background:var(--panel);color:var(--muted);font-size:11px}.activity-overview b{color:var(--text);font-size:18px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dashboard-shell #activityDialog .activity-tabs{max-width:520px}.dashboard-shell #activityDialog .activity-columns{max-width:900px}.dashboard-shell #activityDialog .activity-list{padding:4px 0 30px;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
