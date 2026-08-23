@@ -104,6 +104,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/scan", s.startScan)
 	m.HandleFunc("GET /api/scan/status", func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, s.scanner.Status()) })
 	m.HandleFunc("GET /api/scan/history", s.scanHistory)
+	m.HandleFunc("GET /api/status/events", s.statusEvents)
 	m.HandleFunc("GET /api/settings", s.getSettings)
 	m.HandleFunc("PATCH /api/settings", s.patchSettings)
 	m.HandleFunc("GET /api/backup", s.backup)
@@ -483,8 +484,44 @@ func (s *Server) scanHistory(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, total, scanned, found int
 		var started, finished, status, cidrs, err string
-		rows.Scan(&id, &started, &finished, &status, &cidrs, &total, &scanned, &found, &err)
+		if scanErr := rows.Scan(&id, &started, &finished, &status, &cidrs, &total, &scanned, &found, &err); scanErr != nil {
+			fail(w, 500, "database_error", scanErr.Error())
+			return
+		}
 		out = append(out, map[string]any{"id": id, "started_at": started, "finished_at": finished, "status": status, "cidrs": cidrs, "total": total, "scanned": scanned, "found": found, "error": err})
+	}
+	if err := rows.Err(); err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	jsonOut(w, 200, out)
+}
+func (s *Server) statusEvents(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	rows, err := s.store.db.Query(`SELECT e.id,e.device_id,e.event_type,e.old_status,e.new_status,e.created_at,COALESCE(NULLIF(d.user_name,''),NULLIF(d.auto_hostname,''),NULLIF(d.current_ip,''),'已删除设备') FROM status_events e LEFT JOIN devices d ON d.id=e.device_id ORDER BY e.id DESC LIMIT ?`, limit)
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, deviceID int64
+		var eventType, oldStatus, newStatus, createdAt, deviceName string
+		if err = rows.Scan(&id, &deviceID, &eventType, &oldStatus, &newStatus, &createdAt, &deviceName); err != nil {
+			fail(w, 500, "database_error", err.Error())
+			return
+		}
+		out = append(out, map[string]any{"id": id, "device_id": deviceID, "device_name": deviceName, "event_type": eventType, "old_status": oldStatus, "new_status": newStatus, "created_at": createdAt})
+	}
+	if err = rows.Err(); err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
 	}
 	jsonOut(w, 200, out)
 }

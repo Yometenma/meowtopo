@@ -248,8 +248,12 @@ func (s *Store) markMisses(seen map[string]bool, threshold int) error {
 			_, _ = s.db.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at)VALUES(?,'status',?,?,?)`, d.ID, d.Status, status, t)
 		}
 	}
-	_, _ = s.db.Exec(`DELETE FROM status_events WHERE id NOT IN (SELECT id FROM status_events ORDER BY id DESC LIMIT 5000)`)
+	_ = s.trimStatusEvents(5000)
 	return nil
+}
+func (s *Store) trimStatusEvents(limit int) error {
+	_, err := s.db.Exec(`DELETE FROM status_events WHERE id NOT IN (SELECT id FROM status_events ORDER BY id DESC LIMIT ?)`, limit)
+	return err
 }
 func (s *Store) connections() (out []Connection, err error) {
 	r, e := s.db.Query(`SELECT id,source_device_id,target_device_id,connection_type,port_label,source_type,confidence,user_confirmed FROM connections`)

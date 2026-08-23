@@ -2,12 +2,60 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+func TestStatusEventsReturnsNewestFirstAndHonorsLimit(t *testing.T) {
+	s := testServer(t)
+	device, err := s.store.createManual("客厅交换机", "switch", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []string{"suspected_offline", "offline"} {
+		if _, err = s.store.db.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at) VALUES(?,'status','online',?,?)`, device.ID, status, now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := httptest.NewRecorder()
+	s.statusEvents(rec, httptest.NewRequest(http.MethodGet, "/api/status/events?limit=1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var rows []struct {
+		DeviceName string `json:"device_name"`
+		NewStatus  string `json:"new_status"`
+	}
+	if err = json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].DeviceName != "客厅交换机" || rows[0].NewStatus != "offline" {
+		t.Fatalf("unexpected events: %+v", rows)
+	}
+}
+
+func TestTrimStatusEventsKeepsNewest(t *testing.T) {
+	store := testStore(t)
+	for i := 0; i < 5; i++ {
+		if _, err := store.db.Exec(`INSERT INTO status_events(event_type,old_status,new_status,created_at) VALUES('status','online','offline',?)`, now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.trimStatusEvents(3); err != nil {
+		t.Fatal(err)
+	}
+	var count, minID int
+	if err := store.db.QueryRow(`SELECT COUNT(*),MIN(id) FROM status_events`).Scan(&count, &minID); err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 || minID != 3 {
+		t.Fatalf("count=%d minID=%d", count, minID)
+	}
+}
 
 func testServer(t *testing.T) *Server {
 	t.Helper()
