@@ -66,7 +66,7 @@ func openStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, err
 	}
-	p := filepath.Join(dir, "moetopo.db")
+	p := filepath.Join(dir, "meowtopo.db")
 	db, err := sql.Open("sqlite", p+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, err

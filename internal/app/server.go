@@ -60,7 +60,7 @@ func Run(version string) error {
 	if c.ScanInterval > 0 {
 		go srv.schedule(c.ScanInterval)
 	}
-	slog.Info("MoeTopo started", "address", c.HTTPAddr, "data", c.DataDir)
+	slog.Info("MeowTopo started", "address", c.HTTPAddr, "data", c.DataDir)
 	return httpSrv.ListenAndServe()
 }
 func (s *Server) schedule(interval time.Duration) {
@@ -77,7 +77,7 @@ func (s *Server) routes(m *http.ServeMux) {
 		jsonOut(w, 200, map[string]any{"status": "ok", "database": s.store.db.Ping() == nil})
 	})
 	m.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
-		jsonOut(w, 200, map[string]string{"name": "MoeTopo", "version": s.version})
+		jsonOut(w, 200, map[string]string{"name": "MeowTopo", "version": s.version})
 	})
 	m.HandleFunc("GET /api/network/interfaces", func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, detectNetwork(s.cfg.DataDir).Interfaces) })
 	m.HandleFunc("GET /api/network/detection", func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, detectNetwork(s.cfg.DataDir)) })
@@ -411,9 +411,9 @@ func (s *Server) backup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="moetopo-backup.zip"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="meowtopo-backup.zip"`)
 	z := zip.NewWriter(w)
-	f, _ := z.Create("moetopo.db")
+	f, _ := z.Create("meowtopo.db")
 	src, e := os.Open(s.store.path)
 	if e == nil {
 		_, _ = io.Copy(f, src)
@@ -435,7 +435,7 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 	}
 	var db []byte
 	for _, f := range zr.File {
-		if f.Name == "moetopo.db" && f.UncompressedSize64 <= 64<<20 {
+		if f.Name == "meowtopo.db" && f.UncompressedSize64 <= 64<<20 {
 			rc, _ := f.Open()
 			db, _ = io.ReadAll(rc)
 			rc.Close()

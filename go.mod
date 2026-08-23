@@ -1,4 +1,4 @@
-module github.com/moetopo/moetopo
+module github.com/Yometenma/meowtopo
 
 go 1.23.0
 

@@ -44,8 +44,8 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 }
 
 func loadConfig() Config {
-	c := Config{HTTPAddr: env("MOETOPO_HTTP_ADDR", "127.0.0.1:8088"), DataDir: env("MOETOPO_DATA_DIR", "./data"), Interface: env("MOETOPO_SCAN_INTERFACE", ""), GatewayIP: env("MOETOPO_GATEWAY_IP", ""), LogLevel: env("MOETOPO_LOG_LEVEL", "info"), ScanInterval: envDuration("MOETOPO_SCAN_INTERVAL", 5*time.Minute), PingTimeout: envDuration("MOETOPO_PING_TIMEOUT", 800*time.Millisecond), TCPTimeout: envDuration("MOETOPO_TCP_TIMEOUT", 350*time.Millisecond), Concurrency: envInt("MOETOPO_SCAN_CONCURRENCY", 32), OfflineThreshold: envInt("MOETOPO_OFFLINE_THRESHOLD", 3), EnablePortScan: envBool("MOETOPO_ENABLE_PORT_SCAN", true)}
-	for _, v := range strings.Split(env("MOETOPO_SCAN_CIDRS", ""), ",") {
+	c := Config{HTTPAddr: env("MEOWTOPO_HTTP_ADDR", "127.0.0.1:8088"), DataDir: env("MEOWTOPO_DATA_DIR", "./data"), Interface: env("MEOWTOPO_SCAN_INTERFACE", ""), GatewayIP: env("MEOWTOPO_GATEWAY_IP", ""), LogLevel: env("MEOWTOPO_LOG_LEVEL", "info"), ScanInterval: envDuration("MEOWTOPO_SCAN_INTERVAL", 5*time.Minute), PingTimeout: envDuration("MEOWTOPO_PING_TIMEOUT", 800*time.Millisecond), TCPTimeout: envDuration("MEOWTOPO_TCP_TIMEOUT", 350*time.Millisecond), Concurrency: envInt("MEOWTOPO_SCAN_CONCURRENCY", 32), OfflineThreshold: envInt("MEOWTOPO_OFFLINE_THRESHOLD", 3), EnablePortScan: envBool("MEOWTOPO_ENABLE_PORT_SCAN", true)}
+	for _, v := range strings.Split(env("MEOWTOPO_SCAN_CIDRS", ""), ",") {
 		if v = strings.TrimSpace(v); v != "" {
 			c.CIDRs = append(c.CIDRs, v)
 		}

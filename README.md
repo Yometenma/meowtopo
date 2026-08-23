@@ -1,10 +1,10 @@
-# MoeTopo · 喵拓
+# MeowTopo · 喵拓
 
 **Home Network Topology** — *Your LAN, connected.*
 
-MoeTopo 是一个面向家庭与 Homelab 的轻量级局域网拓扑监控 Web 应用。它自动发现私有 IPv4 网络中的设备，以可交互节点图展示逻辑拓扑，并把设备、用户修正的关系和画布位置保存在本地 SQLite 文件中。
+MeowTopo 是一个面向家庭与 Homelab 的轻量级局域网拓扑监控 Web 应用。它自动发现私有 IPv4 网络中的设备，以可交互节点图展示逻辑拓扑，并把设备、用户修正的关系和画布位置保存在本地 SQLite 文件中。
 
-> 安全提示：MoeTopo 第一版没有登录系统，默认仅监听 `127.0.0.1`。Docker Compose 面向受信任家庭局域网监听所有地址，请勿把端口直接映射到互联网。
+> 安全提示：MeowTopo 第一版没有登录系统，默认仅监听 `127.0.0.1`。Docker Compose 面向受信任家庭局域网监听所有地址，请勿把端口直接映射到互联网。
 
 ## 第一版功能
 
@@ -27,14 +27,14 @@ MoeTopo 是一个面向家庭与 Homelab 的轻量级局域网拓扑监控 Web �
 docker compose up -d --build
 ```
 
-默认访问 `http://服务器IP:8088`，数据库位于宿主机 `./data/moetopo.db`。Compose 使用 Linux `network_mode: host`，这是发现真实家庭网络接口并避免把容器 bridge 网关误认为主路由的推荐方式。
+默认访问 `http://服务器IP:8088`，数据库位于宿主机 `./data/meowtopo.db`。Compose 使用 Linux `network_mode: host`，这是发现真实家庭网络接口并避免把容器 bridge 网关误认为主路由的推荐方式。
 
 容器使用非 root 用户并启用 `no-new-privileges`。示例只添加 `NET_RAW`，用于发送 ICMP Echo；权限不足或设备不响应时自动回退到非侵入式 TCP connect。探测不执行 HTTP 请求、漏洞检测或口令尝试，也不需要 `NET_ADMIN`，更不使用 `privileged: true`。
 
 ARM64 可通过多架构构建：
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t moetopo/moetopo:latest .
+docker buildx build --platform linux/amd64,linux/arm64 -t meowtopo/meowtopo:latest .
 ```
 
 ## 本地运行
@@ -42,7 +42,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t moetopo/moetopo:latest
 需要 Go 1.23 或更高版本：
 
 ```bash
-go run ./cmd/moetopo
+go run ./cmd/meowtopo
 ```
 
 默认访问 `http://127.0.0.1:8088`，数据写入 `./data`。页面所需 Cytoscape.js 已嵌入二进制，运行时不访问 CDN。
@@ -53,18 +53,18 @@ go run ./cmd/moetopo
 
 | 环境变量 | 默认值 | 说明 |
 |---|---:|---|
-| `MOETOPO_HTTP_ADDR` | `127.0.0.1:8088` | 监听地址 |
-| `MOETOPO_DATA_DIR` | `./data` | 数据目录 |
-| `MOETOPO_SCAN_INTERFACE` | 空 | 扫描接口 |
-| `MOETOPO_SCAN_CIDRS` | 空 | 逗号分隔 CIDR；第一版扫描首个网段 |
-| `MOETOPO_GATEWAY_IP` | 空 | 主网关 |
-| `MOETOPO_SCAN_INTERVAL` | `5m` | 自动扫描间隔 |
-| `MOETOPO_SCAN_CONCURRENCY` | `32` | 并发，最大 128 |
-| `MOETOPO_PING_TIMEOUT` | `800ms` | ICMP 扩展预留超时 |
-| `MOETOPO_TCP_TIMEOUT` | `350ms` | 单端口连接超时 |
-| `MOETOPO_OFFLINE_THRESHOLD` | `3` | 连续失败离线阈值 |
-| `MOETOPO_ENABLE_PORT_SCAN` | `true` | 常用端口探测 |
-| `MOETOPO_LOG_LEVEL` | `info` | 日志级别 |
+| `MEOWTOPO_HTTP_ADDR` | `127.0.0.1:8088` | 监听地址 |
+| `MEOWTOPO_DATA_DIR` | `./data` | 数据目录 |
+| `MEOWTOPO_SCAN_INTERFACE` | 空 | 扫描接口 |
+| `MEOWTOPO_SCAN_CIDRS` | 空 | 逗号分隔 CIDR；第一版扫描首个网段 |
+| `MEOWTOPO_GATEWAY_IP` | 空 | 主网关 |
+| `MEOWTOPO_SCAN_INTERVAL` | `5m` | 自动扫描间隔 |
+| `MEOWTOPO_SCAN_CONCURRENCY` | `32` | 并发，最大 128 |
+| `MEOWTOPO_PING_TIMEOUT` | `800ms` | ICMP 扩展预留超时 |
+| `MEOWTOPO_TCP_TIMEOUT` | `350ms` | 单端口连接超时 |
+| `MEOWTOPO_OFFLINE_THRESHOLD` | `3` | 连续失败离线阈值 |
+| `MEOWTOPO_ENABLE_PORT_SCAN` | `true` | 常用端口探测 |
+| `MEOWTOPO_LOG_LEVEL` | `info` | 日志级别 |
 
 时区读取系统配置，也可通过标准 `TZ` 环境变量覆盖。示例值见 `.env.example`，示例网段绝不写死在程序逻辑中。
 
@@ -92,7 +92,7 @@ docker compose up -d --build
 ```bash
 go test ./...
 go vet ./...
-docker build -t moetopo/moetopo:local .
+docker build -t meowtopo/meowtopo:local .
 ```
 
 测试数据使用虚构私有地址。仓库忽略运行数据库、日志和 `data` 目录，不应提交真实家庭网络信息。

@@ -1,8 +1,10 @@
+name: meowtopo
+
 services:
-  moetopo:
+  meowtopo:
     build: .
-    image: moetopo/moetopo:local
-    container_name: moetopo
+    image: meowtopo/meowtopo:local
+    container_name: meowtopo
     network_mode: host
     restart: unless-stopped
     cap_add:
@@ -12,6 +14,6 @@ services:
     volumes:
       - ./data:/data
     environment:
-      MOETOPO_DATA_DIR: /data
-      MOETOPO_HTTP_ADDR: 0.0.0.0:8088
+      MEOWTOPO_DATA_DIR: /data
+      MEOWTOPO_HTTP_ADDR: 0.0.0.0:8088
       # TZ: Asia/Shanghai

@@ -3,8 +3,8 @@
 *.db-shm
 *.db-wal
 *.log
-/moetopo
-/moetopo.exe
+/meowtopo
+/meowtopo.exe
 /.idea/
 /.vscode/
 .DS_Store
