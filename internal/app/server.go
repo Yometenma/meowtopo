@@ -3,6 +3,7 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -29,6 +30,7 @@ type Server struct {
 	events          *EventHub
 	version         string
 	intervalUpdates chan time.Duration
+	notifier        *Notifier
 }
 
 func Run(version string) error {
@@ -48,7 +50,8 @@ func Run(version string) error {
 	}
 	hub := newHub()
 	srv := &Server{cfg: c, store: st, events: hub, version: version, intervalUpdates: make(chan time.Duration, 1)}
-	srv.scanner = &Scanner{store: st, cfg: c, events: hub}
+	srv.notifier = newNotifier(st)
+	srv.scanner = &Scanner{store: st, cfg: c, events: hub, notifier: srv.notifier}
 	mux := http.NewServeMux()
 	srv.routes(mux)
 	h := securityHeaders(logRequests(mux))
@@ -107,6 +110,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/status/events", s.statusEvents)
 	m.HandleFunc("GET /api/settings", s.getSettings)
 	m.HandleFunc("PATCH /api/settings", s.patchSettings)
+	m.HandleFunc("POST /api/notifications/test", s.testNotification)
 	m.HandleFunc("GET /api/backup", s.backup)
 	m.HandleFunc("POST /api/restore", s.restore)
 	m.HandleFunc("GET /api/events", s.sse)
@@ -531,7 +535,22 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "database_error", e.Error())
 		return
 	}
+	if v["notification_telegram_token"] != "" {
+		v["notification_telegram_token"] = "••••••••"
+	}
 	jsonOut(w, 200, v)
+}
+func (s *Server) testNotification(w http.ResponseWriter, r *http.Request) {
+	if s.notifier == nil {
+		s.notifier = newNotifier(s.store)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	if err := s.notifier.SendTest(ctx); err != nil {
+		fail(w, 502, "notification_failed", err.Error())
+		return
+	}
+	jsonOut(w, 200, map[string]bool{"sent": true})
 }
 func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
 	var v map[string]any
@@ -561,6 +580,10 @@ func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		switch value := value.(type) {
 		case string:
+			if key == "notification_telegram_token" && value == "••••••••" {
+				delete(v, key)
+				continue
+			}
 			current[key] = value
 		case bool:
 			current[key] = strconv.FormatBool(value)

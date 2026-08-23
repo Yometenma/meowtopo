@@ -308,7 +308,9 @@ func (s *Store) saveSettings(m map[string]any) error {
 }
 func allowedSetting(k string) bool {
 	switch k {
-	case "initialized", "scan_interface", "scan_cidrs", "gateway_ip", "scan_interval", "scan_concurrency", "ping_timeout", "tcp_timeout", "offline_threshold", "enable_port_scan", "theme", "label_mode", "hide_offline_days":
+	case "initialized", "scan_interface", "scan_cidrs", "gateway_ip", "scan_interval", "scan_concurrency", "ping_timeout", "tcp_timeout", "offline_threshold", "enable_port_scan", "theme", "label_mode", "hide_offline_days",
+		"notification_enabled", "notification_telegram_enabled", "notification_telegram_token", "notification_telegram_chat_id", "notification_webhook_enabled", "notification_webhook_url",
+		"notification_new_device", "notification_offline", "notification_online", "notification_scan_error":
 		return true
 	}
 	return false

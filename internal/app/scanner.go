@@ -29,11 +29,12 @@ type ProbeResult struct {
 	OpenPorts []int
 }
 type Scanner struct {
-	mu     sync.RWMutex
-	status ScanStatus
-	store  *Store
-	cfg    Config
-	events *EventHub
+	mu       sync.RWMutex
+	status   ScanStatus
+	store    *Store
+	cfg      Config
+	events   *EventHub
+	notifier *Notifier
 }
 
 func (s *Scanner) Status() ScanStatus { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
@@ -139,6 +140,9 @@ sendLoop:
 	}
 	_, _ = s.store.db.Exec(`UPDATE scan_runs SET finished_at=?,status=?,scanned_addresses=?,found_devices=?,error_summary=? WHERE id=?`, st.FinishedAt, state, st.Scanned, st.Found, st.Error, st.RunID)
 	s.events.Emit("scan_completed", st)
+	if s.notifier != nil {
+		go s.notifier.NotifyScan(st.StartedAt, st)
+	}
 }
 func (s *Scanner) probe(ctx context.Context, ip string) ProbeResult {
 	cfg := s.config()
