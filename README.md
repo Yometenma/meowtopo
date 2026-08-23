@@ -22,6 +22,69 @@ MeowTopo 会定时查看家庭网络或 Homelab 中有哪些设备，把它们�
 
 MeowTopo 没有遥测、广告、云同步或必须注册的在线账户，也不会尝试登录设备、猜测密码、扫描漏洞或抓取设备网页。
 
+## 部署前需要准备什么
+
+### 使用 Docker 部署
+
+推荐准备：
+
+- 一台长期在线、连接到家庭局域网的 **Linux** 服务器、NAS 或小主机
+- 已安装 Docker Engine 和 Docker Compose 插件
+- 可以使用终端或 SSH 登录服务器
+- 服务器能够访问 GitHub 和 Docker Hub，用于下载源码和构建镜像
+- 服务器在待监控局域网中拥有正常的 IPv4 地址
+- 局域网中的电脑或手机可以访问服务器的 `8088` 端口
+- 建议至少留出 2 GiB 可用磁盘空间，用于源码、构建缓存、基础镜像和数据库；构建完成后可以清理无用缓存
+
+可以先运行下面两条命令检查 Docker：
+
+```bash
+docker --version
+docker compose version
+```
+
+两条命令都能正常显示版本后再继续。普通运行不需要 Kubernetes，也不需要安装 Node.js、Python、MySQL、Redis 或单独的网页服务器。
+
+Compose 使用 Linux 主机网络，让容器能够观察真实局域网。推荐 Ubuntu、Debian、Fedora、Rocky Linux、OpenMediaVault、Unraid 等能够正常运行 Docker 的 Linux 环境。群晖等 NAS 如果修改过 Docker 或网络权限，可能需要根据系统界面调整目录和容器设置。
+
+### 不使用 Docker
+
+需要：
+
+- Windows、Linux 或 macOS
+- Go 1.23 或更高版本
+- 可写的数据目录
+- 用于打开管理页面的现代浏览器
+
+先检查 Go：
+
+```bash
+go version
+```
+
+如果要让同一局域网中的其他设备访问，还需要把监听地址改为局域网可访问的地址，并在系统防火墙中只允许受信任局域网访问。默认的 `127.0.0.1:8088` 只能从运行 MeowTopo 的本机打开。
+
+### 浏览器要求
+
+推荐使用较新的 Chrome、Edge、Firefox 或 Safari，并启用 JavaScript。页面资源已经包含在程序中，不需要浏览器访问外部 CDN。
+
+### 使用 Telegram 通知还需要
+
+- 一个可以正常使用的 Telegram 账号
+- 通过 `@BotFather` 创建的机器人
+- MeowTopo 所在服务器能够访问 `https://api.telegram.org`
+- 如果推送到群组或频道，机器人需要拥有发送消息的权限
+
+如果服务器所在网络不能直接连接 Telegram API，需要为服务器或容器正确配置网络代理；仅在自己电脑的 Telegram 客户端里设置代理不会自动作用到服务器。
+
+### 网络和安全条件
+
+- MeowTopo 与被监控设备之间不能被访客网络、VLAN 或路由器隔离规则完全阻断
+- 扫描其他 VLAN 或多个网段时，服务器本身必须有到目标网段的路由和防火墙权限
+- 不要扫描不属于自己或未经授权的网络
+- 当前版本没有登录系统，不要直接把 `8088` 端口转发到互联网
+- 远程访问推荐使用 Tailscale、WireGuard 等可信 VPN，或在带身份验证和 HTTPS 的反向代理后使用
+
 ## 推荐部署方式：Docker
 
 适合装有 Linux 和 Docker 的家庭服务器、NAS 或 Homelab 主机。
