@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="internal/app/web/assets/topo-chan.png" width="180" alt="Topo酱">
   <h1>MeowTopo · 喵拓</h1>
   <p><strong>把家里的网络，变成一张看得懂、会提醒你的拓扑图。</strong></p>
   <p>轻量 · 自托管 · 单文件 · 无遥测</p>
