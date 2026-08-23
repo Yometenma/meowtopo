@@ -80,3 +80,14 @@ html.dark .dashboard-shell .canvas-page{box-shadow:0 18px 55px #0004,inset 0 1px
 /* Keep checkboxes out of the shared text-field sizing rules. */
 .check{gap:8px}
 .check input[type="checkbox"],.dashboard-shell dialog input[type="checkbox"],.dashboard-shell .drawer input[type="checkbox"]{appearance:auto;width:16px;height:16px;min-width:16px;min-height:16px;padding:0;margin:0;flex:none;accent-color:var(--mint);box-shadow:none}
+
+/* Workspace pages replace the topology canvas, so canvas-only actions stay hidden. */
+.workspace-open .fab{display:none}
+
+@media(max-width:700px){
+  .dashboard-shell .app-sidebar{height:calc(64px + env(safe-area-inset-bottom));padding-bottom:calc(7px + env(safe-area-inset-bottom))}
+  .dashboard-shell main{bottom:calc(64px + env(safe-area-inset-bottom))}
+  .dashboard-shell #managerDialog,.dashboard-shell #activityDialog,.dashboard-shell #settingsDialog,.dashboard-shell #accountDialog{inset:var(--header) 0 calc(64px + env(safe-area-inset-bottom)) 0;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;touch-action:pan-y;padding-bottom:calc(96px + env(safe-area-inset-bottom))!important}
+  .dashboard-shell #settingsDialog>form{min-height:auto;padding-bottom:24px}
+  .dashboard-shell .nav-button:not(.active):hover{color:var(--muted);background:transparent;box-shadow:none}
+}

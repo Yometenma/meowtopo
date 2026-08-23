@@ -284,22 +284,36 @@ bind = function () {
     [document.querySelector('#settingsBtn'), document.querySelector('#settingsForm button[value="cancel"]')],
     [document.querySelector('#accountBtn'), document.querySelector('#accountClose')]
   ];
-  const closeWorkspacePages = () => ['managerDialog', 'activityDialog', 'settingsDialog', 'accountDialog'].forEach(id => {
+  const workspaceDialogs = ['managerDialog', 'activityDialog', 'settingsDialog', 'accountDialog'];
+  const closeWorkspacePages = () => workspaceDialogs.forEach(id => {
     const dialog = document.querySelector(`#${id}`);
     if (dialog?.open) dialog.close();
   });
-  const activateNav = button => document.querySelectorAll('.sidebar-nav .nav-button').forEach(item => item.classList.toggle('active', item === button));
+  const activateNav = button => {
+    document.querySelectorAll('.sidebar-nav .nav-button').forEach(item => item.classList.toggle('active', item === button));
+    document.body.classList.toggle('workspace-open', button !== overview);
+  };
   navPages.forEach(([open, close]) => {
     if (open) {
       const action = open.onclick;
-      open.onclick = async event => { closeWorkspacePages(); activateNav(open); return action?.call(open, event); };
+      open.onclick = async event => {
+        closeWorkspacePages();
+        activateNav(open);
+        const result = await action?.call(open, event);
+        if (workspaceDialogs.some(id => document.querySelector(`#${id}`)?.open)) activateNav(open);
+        return result;
+      };
     }
     if (close) {
       const action = close.onclick;
       close.onclick = event => { activateNav(overview); return action?.call(close, event); };
     }
   });
-  ['managerDialog', 'activityDialog', 'settingsDialog', 'accountDialog'].forEach(id => document.querySelector(`#${id}`)?.addEventListener('close', () => activateNav(overview)));
+  workspaceDialogs.forEach(id => document.querySelector(`#${id}`)?.addEventListener('close', () => {
+    setTimeout(() => {
+      if (!workspaceDialogs.some(dialogID => document.querySelector(`#${dialogID}`)?.open)) activateNav(overview);
+    }, 0);
+  }));
   if (overview) overview.onclick = () => { closeWorkspacePages(); activateNav(overview); cy?.fit(undefined, 60); };
   document.querySelectorAll('[data-activity-pane]').forEach(button => button.onclick = () => {
     document.querySelectorAll('[data-activity-pane]').forEach(item => item.classList.toggle('active', item === button));
