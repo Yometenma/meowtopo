@@ -214,3 +214,14 @@ func TestDeviceHistorySummary(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestStaticCacheControl(t *testing.T) {
+	for _, path := range []string{"/", "/index.html", "/app.js", "/features.js", "/style.css"} {
+		if got := staticCacheControl(path); !strings.Contains(got, "no-store") {
+			t.Fatalf("staticCacheControl(%q)=%q, want no-store", path, got)
+		}
+	}
+	if got := staticCacheControl("/assets/devices/topo-router.png"); !strings.Contains(got, "max-age") {
+		t.Fatalf("asset cache control=%q, want max-age", got)
+	}
+}

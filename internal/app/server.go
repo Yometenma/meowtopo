@@ -129,8 +129,20 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("POST /api/restore", s.require(PermManageUsers, s.restore))
 	m.Handle("GET /api/events", s.require(PermView, s.sse))
 	root, _ := fs.Sub(webFS, "web")
-	m.Handle("/", http.FileServer(http.FS(root)))
+	files := http.FileServer(http.FS(root))
+	m.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", staticCacheControl(r.URL.Path))
+		files.ServeHTTP(w, r)
+	}))
 }
+
+func staticCacheControl(path string) string {
+	if path == "/" || path == "/index.html" || strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") {
+		return "no-cache, no-store, must-revalidate"
+	}
+	return "public, max-age=86400"
+}
+
 func idParam(r *http.Request) (int64, error) { return strconv.ParseInt(r.PathValue("id"), 10, 64) }
 func jsonOut(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
