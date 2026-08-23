@@ -43,7 +43,7 @@ func authSessionFromResponse(t *testing.T, rec *httptest.ResponseRecorder) (*htt
 	if session == nil || session.Value == "" {
 		t.Fatal("session cookie missing")
 	}
-	if !session.HttpOnly || session.SameSite != http.SameSiteStrictMode {
+	if !session.HttpOnly || session.SameSite != http.SameSiteLaxMode || session.Expires.IsZero() {
 		t.Fatalf("unsafe session cookie: %+v", session)
 	}
 	if result.CSRF == "" {
