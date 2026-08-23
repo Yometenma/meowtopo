@@ -50,6 +50,8 @@ func TestIdentifyType(t *testing.T) {
 	}{
 		{"hostname NAS", "DiskStation-Synology.local.", "nas", "hostname", nil},
 		{"hostname router", "home-openwrt", "router", "hostname", nil},
+		{"hostname switch", "core-switch.local.", "switch", "hostname", nil},
+		{"TP-Link switch model", "TL-SG108E.local.", "switch", "hostname", nil},
 		{"Home Assistant port", "", "iot", "ports", []int{8123}},
 		{"camera port", "", "camera", "ports", []int{554}},
 		{"DNS web gateway", "", "router", "ports", []int{53, 443}},

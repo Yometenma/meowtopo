@@ -367,6 +367,7 @@ func identifyType(host string, ports []int) (string, string, float64) {
 	}{
 		{"nas", .92, []string{"synology", "qnap", "truenas", "openmediavault", "-nas", "nas-"}},
 		{"router", .9, []string{"openwrt", "opnsense", "pfsense", "router", "gateway"}},
+		{"switch", .89, []string{"switch", "tl-sg", "tl-sl", "-sw-", "sw-core", "core-sw"}},
 		{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr"}},
 		{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet"}},
 		{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly"}},
