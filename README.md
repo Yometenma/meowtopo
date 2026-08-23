@@ -53,7 +53,7 @@ docker compose version
 ```
 
 > [!NOTE]
-> 当前 Compose 会在本机从源码构建镜像，不是从 Docker Hub 下载现成镜像。首次启动需要访问 GitHub、Go 模块源和 Docker 镜像仓库。
+> 仓库中的 Compose 默认从源码构建，适合跟随最新开发进度。正式版容器镜像同时发布在 GitHub Container Registry，支持 AMD64 和 ARM64。
 
 容器首次启动时会自动处理 `./data` 目录权限，然后以固定的非管理员用户运行 MeowTopo，不需要手动执行 `chown`。如果数据目录位于不允许容器修改权限的 NFS 或特殊 NAS 共享中，请先在宿主机上将该目录设置为 UID/GID `10001:10001` 可写。
 
@@ -102,7 +102,27 @@ docker compose up -d --build
 
 升级前建议先在“设置 → 备份与恢复”中下载备份。
 
-发布版本会自动提供 Windows、Linux 的 AMD64/ARM64 单文件程序和校验文件；容器镜像发布到 GitHub Container Registry。第一次正式版本发布前，仍建议按上面的 Compose 源码构建方式安装。
+正式版本会提供 Windows、Linux 的 AMD64/ARM64 单文件程序和校验文件；容器镜像发布到 GitHub Container Registry。下载地址见 [GitHub Releases](https://github.com/Yometenma/meowtopo/releases)。
+
+### 使用正式版容器镜像
+
+不想在服务器上编译时，可以直接使用正式镜像：
+
+```bash
+docker pull ghcr.io/yometenma/meowtopo:1.0.0
+docker run -d \
+  --name meowtopo \
+  --restart unless-stopped \
+  --network host \
+  --cap-add NET_RAW \
+  --security-opt no-new-privileges:true \
+  -e MEOWTOPO_DATA_DIR=/data \
+  -e MEOWTOPO_HTTP_ADDR=0.0.0.0:8088 \
+  -v "$(pwd)/data:/data" \
+  ghcr.io/yometenma/meowtopo:1.0.0
+```
+
+然后打开 `http://服务器IP:8088`。升级正式版前先下载备份，再拉取新标签并重新创建容器。希望始终跟随最新正式版时，也可以使用 `ghcr.io/yometenma/meowtopo:latest`。
 
 ## 为什么推荐 Linux + Host 网络
 
