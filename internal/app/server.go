@@ -262,8 +262,8 @@ func (s *Server) pingDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	ok, lat, method := s.scanner.probe(ctx, d.IP)
-	jsonOut(w, 200, map[string]any{"reachable": ok, "latency_ms": lat, "method": method})
+	result := s.scanner.probe(ctx, d.IP)
+	jsonOut(w, 200, map[string]any{"reachable": result.Alive, "latency_ms": result.Latency, "method": result.Method, "open_ports": result.OpenPorts})
 }
 func (s *Server) position(w http.ResponseWriter, r *http.Request) {
 	id, e := idParam(r)

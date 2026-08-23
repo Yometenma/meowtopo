@@ -1,6 +1,8 @@
 package app
 
 import (
+	"database/sql"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -16,7 +18,7 @@ func testStore(t *testing.T) *Store {
 }
 func TestManualFieldsSurviveScan(t *testing.T) {
 	s := testStore(t)
-	d, e := s.upsertSeen("192.168.7.10", "aa:bb:cc:dd:ee:ff", "auto", "unknown", 2)
+	d, e := s.upsertSeen(Discovery{IP: "192.168.7.10", MAC: "aa:bb:cc:dd:ee:ff", Hostname: "auto", Type: "unknown", Latency: 2})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -24,17 +26,27 @@ func TestManualFieldsSurviveScan(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	d, e = s.upsertSeen("192.168.7.20", "aa:bb:cc:dd:ee:ff", "changed", "linux", 3)
+	d, e = s.upsertSeen(Discovery{IP: "192.168.7.20", MAC: "aa:bb:cc:dd:ee:ff", Hostname: "changed", Type: "linux", Latency: 3, ProbeMethod: "icmp", OpenPorts: []int{22}, TypeSource: "ports", TypeConfidence: .45})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if d.UserName != "我的 NAS" || d.UserType != "nas" || d.Notes != "机柜" || d.IP != "192.168.7.20" {
 		t.Fatalf("manual fields overwritten: %+v", d)
 	}
+	if d.AutoType != "linux" || d.ProbeMethod != "icmp" || len(d.OpenPorts) != 1 || d.OpenPorts[0] != 22 || d.TypeSource != "ports" || d.TypeConfidence != .45 {
+		t.Fatalf("discovery metadata missing: %+v", d)
+	}
+	d, e = s.upsertSeen(Discovery{IP: "192.168.7.20", MAC: "aa:bb:cc:dd:ee:ff", Hostname: "changed", Type: "unknown", Latency: 4, ProbeMethod: "icmp", TypeConfidence: 0})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if d.AutoType != "linux" || d.TypeSource != "ports" || d.TypeConfidence != .45 {
+		t.Fatalf("lower-confidence scan downgraded identification: %+v", d)
+	}
 }
 func TestOfflineThreshold(t *testing.T) {
 	s := testStore(t)
-	d, e := s.upsertSeen("10.0.1.5", "", "host", "unknown", 1)
+	d, e := s.upsertSeen(Discovery{IP: "10.0.1.5", Hostname: "host", Type: "unknown", Latency: 1})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -79,4 +91,45 @@ func TestPositionConnectionAndMigration(t *testing.T) {
 		t.Fatalf("connection missing %+v", cs)
 	}
 	_ = time.Second
+}
+
+func TestLegacyDeviceTableMigration(t *testing.T) {
+	dir := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(dir, "meowtopo.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE devices(id INTEGER PRIMARY KEY AUTOINCREMENT,stable_key TEXT NOT NULL UNIQUE,mac_address TEXT DEFAULT '',current_ip TEXT DEFAULT '',auto_hostname TEXT DEFAULT '',user_name TEXT DEFAULT '',vendor TEXT DEFAULT '',auto_device_type TEXT DEFAULT 'unknown',user_device_type TEXT DEFAULT '',icon TEXT DEFAULT '',notes TEXT DEFAULT '',first_seen_at TEXT NOT NULL,last_seen_at TEXT DEFAULT '',last_checked_at TEXT DEFAULT '',status TEXT NOT NULL DEFAULT 'unknown',ping_latency_ms REAL DEFAULT 0,consecutive_successes INTEGER DEFAULT 0,consecutive_failures INTEGER DEFAULT 0,is_new INTEGER DEFAULT 1,is_hidden INTEGER DEFAULT 0,is_ignored INTEGER DEFAULT 0,always_show INTEGER DEFAULT 0,created_manually INTEGER DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	store, err := openStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.db.Close()
+	rows, err := store.db.Query(`PRAGMA table_info(devices)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	want := map[string]bool{"probe_method": false, "open_ports": false, "identification_source": false, "identification_confidence": false}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, kind string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &kind, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := want[name]; ok {
+			want[name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("migration did not add %s", name)
+		}
+	}
 }

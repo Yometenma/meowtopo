@@ -22,34 +22,38 @@ type Store struct {
 var manualSequence atomic.Uint64
 
 type Device struct {
-	ID           int64   `json:"id"`
-	StableKey    string  `json:"stable_key"`
-	MAC          string  `json:"mac_address"`
-	IP           string  `json:"current_ip"`
-	AutoHostname string  `json:"auto_hostname"`
-	UserName     string  `json:"user_name"`
-	Vendor       string  `json:"vendor"`
-	AutoType     string  `json:"auto_device_type"`
-	UserType     string  `json:"user_device_type"`
-	Icon         string  `json:"icon"`
-	Notes        string  `json:"notes"`
-	FirstSeen    string  `json:"first_seen_at"`
-	LastSeen     string  `json:"last_seen_at"`
-	LastChecked  string  `json:"last_checked_at"`
-	Status       string  `json:"status"`
-	Latency      float64 `json:"ping_latency_ms"`
-	Successes    int     `json:"consecutive_successes"`
-	Failures     int     `json:"consecutive_failures"`
-	IsNew        bool    `json:"is_new"`
-	IsHidden     bool    `json:"is_hidden"`
-	IsIgnored    bool    `json:"is_ignored"`
-	AlwaysShow   bool    `json:"always_show"`
-	Manual       bool    `json:"created_manually"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	Locked       bool    `json:"locked"`
+	ID             int64   `json:"id"`
+	StableKey      string  `json:"stable_key"`
+	MAC            string  `json:"mac_address"`
+	IP             string  `json:"current_ip"`
+	AutoHostname   string  `json:"auto_hostname"`
+	UserName       string  `json:"user_name"`
+	Vendor         string  `json:"vendor"`
+	AutoType       string  `json:"auto_device_type"`
+	UserType       string  `json:"user_device_type"`
+	Icon           string  `json:"icon"`
+	Notes          string  `json:"notes"`
+	FirstSeen      string  `json:"first_seen_at"`
+	LastSeen       string  `json:"last_seen_at"`
+	LastChecked    string  `json:"last_checked_at"`
+	Status         string  `json:"status"`
+	Latency        float64 `json:"ping_latency_ms"`
+	ProbeMethod    string  `json:"probe_method"`
+	OpenPorts      []int   `json:"open_ports"`
+	TypeSource     string  `json:"identification_source"`
+	TypeConfidence float64 `json:"identification_confidence"`
+	Successes      int     `json:"consecutive_successes"`
+	Failures       int     `json:"consecutive_failures"`
+	IsNew          bool    `json:"is_new"`
+	IsHidden       bool    `json:"is_hidden"`
+	IsIgnored      bool    `json:"is_ignored"`
+	AlwaysShow     bool    `json:"always_show"`
+	Manual         bool    `json:"created_manually"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
+	X              float64 `json:"x"`
+	Y              float64 `json:"y"`
+	Locked         bool    `json:"locked"`
 }
 type Connection struct {
 	ID         int64   `json:"id"`
@@ -88,14 +92,58 @@ CREATE TABLE IF NOT EXISTS scan_runs(id INTEGER PRIMARY KEY AUTOINCREMENT,starte
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS status_events(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER,event_type TEXT,old_status TEXT,new_status TEXT,created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX IF NOT EXISTS idx_events_created ON status_events(created_at);`
-	_, err := s.db.Exec(q)
+	if _, err := s.db.Exec(q); err != nil {
+		return err
+	}
+	for name, definition := range map[string]string{
+		"probe_method":              "TEXT NOT NULL DEFAULT ''",
+		"open_ports":                "TEXT NOT NULL DEFAULT '[]'",
+		"identification_source":     "TEXT NOT NULL DEFAULT ''",
+		"identification_confidence": "REAL NOT NULL DEFAULT 0",
+	} {
+		if err := s.ensureDeviceColumn(name, definition); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2)`)
+	return err
+}
+func (s *Store) ensureDeviceColumn(name, definition string) error {
+	rows, err := s.db.Query(`PRAGMA table_info(devices)`)
+	if err != nil {
+		return err
+	}
+	found := false
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var column, kind string
+		var defaultValue any
+		if err = rows.Scan(&cid, &column, &kind, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
+			return err
+		}
+		if column == name {
+			found = true
+		}
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	if found {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE devices ADD COLUMN ` + name + ` ` + definition)
 	return err
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 func scanDevice(rows interface{ Scan(...any) error }) (Device, error) {
 	var d Device
 	var n, h, ig, a, m, l int
-	err := rows.Scan(&d.ID, &d.StableKey, &d.MAC, &d.IP, &d.AutoHostname, &d.UserName, &d.Vendor, &d.AutoType, &d.UserType, &d.Icon, &d.Notes, &d.FirstSeen, &d.LastSeen, &d.LastChecked, &d.Status, &d.Latency, &d.Successes, &d.Failures, &n, &h, &ig, &a, &m, &d.CreatedAt, &d.UpdatedAt, &d.X, &d.Y, &l)
+	var openPorts string
+	err := rows.Scan(&d.ID, &d.StableKey, &d.MAC, &d.IP, &d.AutoHostname, &d.UserName, &d.Vendor, &d.AutoType, &d.UserType, &d.Icon, &d.Notes, &d.FirstSeen, &d.LastSeen, &d.LastChecked, &d.Status, &d.Latency, &d.ProbeMethod, &openPorts, &d.TypeSource, &d.TypeConfidence, &d.Successes, &d.Failures, &n, &h, &ig, &a, &m, &d.CreatedAt, &d.UpdatedAt, &d.X, &d.Y, &l)
+	if err == nil {
+		_ = json.Unmarshal([]byte(openPorts), &d.OpenPorts)
+	}
 	d.IsNew = n != 0
 	d.IsHidden = h != 0
 	d.IsIgnored = ig != 0
@@ -105,7 +153,7 @@ func scanDevice(rows interface{ Scan(...any) error }) (Device, error) {
 	return d, err
 }
 
-const deviceSelect = `SELECT d.id,d.stable_key,d.mac_address,d.current_ip,d.auto_hostname,d.user_name,d.vendor,d.auto_device_type,d.user_device_type,d.icon,d.notes,d.first_seen_at,d.last_seen_at,d.last_checked_at,d.status,d.ping_latency_ms,d.consecutive_successes,d.consecutive_failures,d.is_new,d.is_hidden,d.is_ignored,d.always_show,d.created_manually,d.created_at,d.updated_at,COALESCE(p.x,0),COALESCE(p.y,0),COALESCE(p.locked,0) FROM devices d LEFT JOIN node_positions p ON p.device_id=d.id`
+const deviceSelect = `SELECT d.id,d.stable_key,d.mac_address,d.current_ip,d.auto_hostname,d.user_name,d.vendor,d.auto_device_type,d.user_device_type,d.icon,d.notes,d.first_seen_at,d.last_seen_at,d.last_checked_at,d.status,d.ping_latency_ms,d.probe_method,d.open_ports,d.identification_source,d.identification_confidence,d.consecutive_successes,d.consecutive_failures,d.is_new,d.is_hidden,d.is_ignored,d.always_show,d.created_manually,d.created_at,d.updated_at,COALESCE(p.x,0),COALESCE(p.y,0),COALESCE(p.locked,0) FROM devices d LEFT JOIN node_positions p ON p.device_id=d.id`
 
 func (s *Store) devices() (out []Device, err error) {
 	r, err := s.db.Query(deviceSelect + ` ORDER BY d.id`)
@@ -125,12 +173,24 @@ func (s *Store) devices() (out []Device, err error) {
 func (s *Store) device(id int64) (Device, error) {
 	return scanDevice(s.db.QueryRow(deviceSelect+` WHERE d.id=?`, id))
 }
-func (s *Store) upsertSeen(ip, mac, host, typ string, latency float64) (Device, error) {
+
+type Discovery struct {
+	IP, MAC, Hostname, Type, ProbeMethod, TypeSource string
+	Latency, TypeConfidence                          float64
+	OpenPorts                                        []int
+}
+
+func (s *Store) upsertSeen(v Discovery) (Device, error) {
 	t := now()
-	key := "ip:" + ip
-	if mac != "" {
-		key = "mac:" + mac
+	key := "ip:" + v.IP
+	if v.MAC != "" {
+		key = "mac:" + v.MAC
 	}
+	openPorts := v.OpenPorts
+	if openPorts == nil {
+		openPorts = []int{}
+	}
+	portsJSON, _ := json.Marshal(openPorts)
 	tx, e := s.db.Begin()
 	if e != nil {
 		return Device{}, e
@@ -138,9 +198,9 @@ func (s *Store) upsertSeen(ip, mac, host, typ string, latency float64) (Device, 
 	defer tx.Rollback()
 	var id int64
 	var oldStatus string
-	e = tx.QueryRow(`SELECT id,status FROM devices WHERE stable_key=? OR (?<>'' AND current_ip=?) ORDER BY stable_key=? DESC LIMIT 1`, key, ip, ip, key).Scan(&id, &oldStatus)
+	e = tx.QueryRow(`SELECT id,status FROM devices WHERE stable_key=? OR (?<>'' AND current_ip=?) ORDER BY stable_key=? DESC LIMIT 1`, key, v.IP, v.IP, key).Scan(&id, &oldStatus)
 	if errors.Is(e, sql.ErrNoRows) {
-		r, e := tx.Exec(`INSERT INTO devices(stable_key,mac_address,current_ip,auto_hostname,auto_device_type,first_seen_at,last_seen_at,last_checked_at,status,ping_latency_ms,consecutive_successes,created_at,updated_at)VALUES(?,?,?,?,?,?,?,?,?, ?,1,?,?)`, key, mac, ip, host, typ, t, t, t, "online", latency, t, t)
+		r, e := tx.Exec(`INSERT INTO devices(stable_key,mac_address,current_ip,auto_hostname,auto_device_type,first_seen_at,last_seen_at,last_checked_at,status,ping_latency_ms,probe_method,open_ports,identification_source,identification_confidence,consecutive_successes,created_at,updated_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`, key, v.MAC, v.IP, v.Hostname, v.Type, t, t, t, "online", v.Latency, v.ProbeMethod, string(portsJSON), v.TypeSource, v.TypeConfidence, t, t)
 		if e != nil {
 			return Device{}, e
 		}
@@ -148,7 +208,7 @@ func (s *Store) upsertSeen(ip, mac, host, typ string, latency float64) (Device, 
 	} else if e != nil {
 		return Device{}, e
 	} else {
-		_, e = tx.Exec(`UPDATE devices SET stable_key=CASE WHEN mac_address='' AND ?<>'' THEN ? ELSE stable_key END,mac_address=CASE WHEN ?<>'' THEN ? ELSE mac_address END,current_ip=?,auto_hostname=CASE WHEN ?<>'' THEN ? ELSE auto_hostname END,auto_device_type=CASE WHEN auto_device_type='unknown' THEN ? ELSE auto_device_type END,last_seen_at=?,last_checked_at=?,status='online',ping_latency_ms=?,consecutive_successes=consecutive_successes+1,consecutive_failures=0,updated_at=? WHERE id=?`, mac, key, mac, mac, ip, host, host, typ, t, t, latency, t, id)
+		_, e = tx.Exec(`UPDATE devices SET stable_key=CASE WHEN mac_address='' AND ?<>'' THEN ? ELSE stable_key END,mac_address=CASE WHEN ?<>'' THEN ? ELSE mac_address END,current_ip=?,auto_hostname=CASE WHEN ?<>'' THEN ? ELSE auto_hostname END,auto_device_type=CASE WHEN ? >= identification_confidence THEN ? ELSE auto_device_type END,probe_method=?,open_ports=?,identification_source=CASE WHEN ? >= identification_confidence THEN ? ELSE identification_source END,identification_confidence=MAX(identification_confidence,?),last_seen_at=?,last_checked_at=?,status='online',ping_latency_ms=?,consecutive_successes=consecutive_successes+1,consecutive_failures=0,updated_at=? WHERE id=?`, v.MAC, key, v.MAC, v.MAC, v.IP, v.Hostname, v.Hostname, v.TypeConfidence, v.Type, v.ProbeMethod, string(portsJSON), v.TypeConfidence, v.TypeSource, v.TypeConfidence, t, t, v.Latency, t, id)
 		if e != nil {
 			return Device{}, e
 		}
@@ -156,7 +216,7 @@ func (s *Store) upsertSeen(ip, mac, host, typ string, latency float64) (Device, 
 			tx.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at)VALUES(?,'status',?,'online',?)`, id, oldStatus, t)
 		}
 	}
-	_, _ = tx.Exec(`INSERT INTO device_addresses(device_id,address,first_seen_at,last_seen_at)VALUES(?,?,?,?) ON CONFLICT(device_id,address) DO UPDATE SET last_seen_at=excluded.last_seen_at`, id, ip, t, t)
+	_, _ = tx.Exec(`INSERT INTO device_addresses(device_id,address,first_seen_at,last_seen_at)VALUES(?,?,?,?) ON CONFLICT(device_id,address) DO UPDATE SET last_seen_at=excluded.last_seen_at`, id, v.IP, t, t)
 	if e = tx.Commit(); e != nil {
 		return Device{}, e
 	}

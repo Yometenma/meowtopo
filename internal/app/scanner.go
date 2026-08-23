@@ -22,6 +22,12 @@ type ScanStatus struct {
 	FinishedAt string `json:"finished_at,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
+type ProbeResult struct {
+	Alive     bool
+	Latency   float64
+	Method    string
+	OpenPorts []int
+}
 type Scanner struct {
 	mu     sync.RWMutex
 	status ScanStatus
@@ -78,8 +84,8 @@ func (s *Scanner) run(n *net.IPNet) {
 		go func() {
 			defer wg.Done()
 			for ip := range jobs {
-				alive, lat, _ := probeTarget(ctx, ip, cfg)
-				if alive {
+				result := probeTarget(ctx, ip, cfg)
+				if result.Alive {
 					seenMu.Lock()
 					seen[ip] = true
 					seenMu.Unlock()
@@ -88,12 +94,13 @@ func (s *Scanner) run(n *net.IPNet) {
 						host = names[0]
 					}
 					mac := arpMAC(ip)
-					d, _ := s.store.upsertSeen(ip, mac, host, guessType(host), lat)
+					typ, source, confidence := identifyType(host, result.OpenPorts)
+					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Type: typ, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: source, TypeConfidence: confidence})
 					s.events.Emit("device_seen", d)
 				}
 				s.mu.Lock()
 				s.status.Scanned++
-				if alive {
+				if result.Alive {
 					s.status.Found++
 				}
 				st := s.status
@@ -133,24 +140,27 @@ sendLoop:
 	_, _ = s.store.db.Exec(`UPDATE scan_runs SET finished_at=?,status=?,scanned_addresses=?,found_devices=?,error_summary=? WHERE id=?`, st.FinishedAt, state, st.Scanned, st.Found, st.Error, st.RunID)
 	s.events.Emit("scan_completed", st)
 }
-func (s *Scanner) probe(ctx context.Context, ip string) (bool, float64, string) {
+func (s *Scanner) probe(ctx context.Context, ip string) ProbeResult {
 	cfg := s.config()
 	return probeTarget(ctx, ip, cfg)
 }
-func probeTarget(ctx context.Context, ip string, cfg Config) (bool, float64, string) {
+func probeTarget(ctx context.Context, ip string, cfg Config) ProbeResult {
 	sourceIP, err := interfaceIPv4(cfg.Interface)
 	if err != nil {
-		return false, 0, ""
+		return ProbeResult{}
 	}
+	result := ProbeResult{}
 	if ok, latency := icmpProbe(ip, sourceIP, cfg.PingTimeout); ok {
-		return true, latency, "icmp"
+		result.Alive = true
+		result.Latency = latency
+		result.Method = "icmp"
 	}
 	if !cfg.EnablePortScan {
-		return false, 0, ""
+		return result
 	}
 	ports := probePorts(cfg.EnablePortScan)
-	start := time.Now()
 	for _, p := range ports {
+		start := time.Now()
 		d := net.Dialer{Timeout: cfg.TCPTimeout}
 		if sourceIP != nil {
 			d.LocalAddr = &net.TCPAddr{IP: sourceIP}
@@ -158,16 +168,23 @@ func probeTarget(ctx context.Context, ip string, cfg Config) (bool, float64, str
 		c, e := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", ip, p))
 		if e == nil {
 			c.Close()
-			return true, float64(time.Since(start).Microseconds()) / 1000, "tcp_connect"
+			result.OpenPorts = append(result.OpenPorts, p)
+			if !result.Alive {
+				result.Alive = true
+				result.Latency = float64(time.Since(start).Microseconds()) / 1000
+				result.Method = "tcp_connect"
+			} else if result.Method == "icmp" {
+				result.Method = "icmp+tcp_connect"
+			}
 		}
 	}
-	return false, 0, ""
+	return result
 }
 func probePorts(enabled bool) []int {
 	if !enabled {
 		return nil
 	}
-	return []int{80, 443, 22, 445, 53, 8123, 32400}
+	return []int{22, 53, 80, 443, 445, 554, 8123, 32400}
 }
 func icmpProbe(target string, sourceIP net.IP, timeout time.Duration) (bool, float64) {
 	addr := net.ParseIP(target)
@@ -253,4 +270,47 @@ func arpMAC(ip string) string {
 	}
 	return ""
 }
-func guessType(host string) string { return "unknown" }
+func identifyType(host string, ports []int) (string, string, float64) {
+	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	hostRules := []struct {
+		kind       string
+		confidence float64
+		words      []string
+	}{
+		{"nas", .92, []string{"synology", "qnap", "truenas", "openmediavault", "-nas", "nas-"}},
+		{"router", .9, []string{"openwrt", "opnsense", "pfsense", "router", "gateway"}},
+		{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr"}},
+		{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet"}},
+		{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly"}},
+		{"linux", .78, []string{"proxmox", "pve", "esxi", "server", "ubuntu", "debian"}},
+		{"phone", .72, []string{"iphone", "android", "pixel", "phone"}},
+		{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast"}},
+	}
+	for _, rule := range hostRules {
+		for _, word := range rule.words {
+			if strings.Contains(host, word) {
+				return rule.kind, "hostname", rule.confidence
+			}
+		}
+	}
+	open := map[int]bool{}
+	for _, port := range ports {
+		open[port] = true
+	}
+	switch {
+	case open[8123]:
+		return "iot", "ports", .78
+	case open[554]:
+		return "camera", "ports", .72
+	case open[32400]:
+		return "nas", "ports", .62
+	case open[53] && (open[80] || open[443]):
+		return "router", "ports", .6
+	case open[445]:
+		return "nas", "ports", .55
+	case open[22]:
+		return "linux", "ports", .45
+	default:
+		return "unknown", "", 0
+	}
+}
