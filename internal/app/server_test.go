@@ -26,7 +26,7 @@ func TestPatchSettingsUpdatesRunningScanner(t *testing.T) {
 	}
 	s.scanner = &Scanner{store: store, cfg: base, events: s.events}
 
-	body := bytes.NewBufferString(`{"scan_cidrs":"10.0.1.0/24","scan_interval":"15m","scan_concurrency":64,"ping_timeout":"1s","tcp_timeout":"500ms","offline_threshold":5,"enable_port_scan":false}`)
+	body := bytes.NewBufferString(`{"scan_interface":"","scan_cidrs":"10.0.1.0/24","scan_interval":"15m","scan_concurrency":64,"ping_timeout":"1s","tcp_timeout":"500ms","offline_threshold":5,"enable_port_scan":false}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/settings", body)
 	rec := httptest.NewRecorder()
 	s.patchSettings(rec, req)

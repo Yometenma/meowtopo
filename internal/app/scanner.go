@@ -78,7 +78,7 @@ func (s *Scanner) run(n *net.IPNet) {
 		go func() {
 			defer wg.Done()
 			for ip := range jobs {
-				alive, lat, _ := s.probe(ctx, ip)
+				alive, lat, _ := probeTarget(ctx, ip, cfg)
 				if alive {
 					seenMu.Lock()
 					seen[ip] = true
@@ -135,7 +135,14 @@ sendLoop:
 }
 func (s *Scanner) probe(ctx context.Context, ip string) (bool, float64, string) {
 	cfg := s.config()
-	if ok, latency := icmpProbe(ip, cfg.PingTimeout); ok {
+	return probeTarget(ctx, ip, cfg)
+}
+func probeTarget(ctx context.Context, ip string, cfg Config) (bool, float64, string) {
+	sourceIP, err := interfaceIPv4(cfg.Interface)
+	if err != nil {
+		return false, 0, ""
+	}
+	if ok, latency := icmpProbe(ip, sourceIP, cfg.PingTimeout); ok {
 		return true, latency, "icmp"
 	}
 	if !cfg.EnablePortScan {
@@ -145,6 +152,9 @@ func (s *Scanner) probe(ctx context.Context, ip string) (bool, float64, string) 
 	start := time.Now()
 	for _, p := range ports {
 		d := net.Dialer{Timeout: cfg.TCPTimeout}
+		if sourceIP != nil {
+			d.LocalAddr = &net.TCPAddr{IP: sourceIP}
+		}
 		c, e := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", ip, p))
 		if e == nil {
 			c.Close()
@@ -159,12 +169,16 @@ func probePorts(enabled bool) []int {
 	}
 	return []int{80, 443, 22, 445, 53, 8123, 32400}
 }
-func icmpProbe(target string, timeout time.Duration) (bool, float64) {
+func icmpProbe(target string, sourceIP net.IP, timeout time.Duration) (bool, float64) {
 	addr := net.ParseIP(target)
 	if addr == nil {
 		return false, 0
 	}
-	c, err := net.DialIP("ip4:icmp", nil, &net.IPAddr{IP: addr})
+	var source *net.IPAddr
+	if sourceIP != nil {
+		source = &net.IPAddr{IP: sourceIP}
+	}
+	c, err := net.DialIP("ip4:icmp", source, &net.IPAddr{IP: addr})
 	if err != nil {
 		return false, 0
 	}

@@ -43,6 +43,7 @@ func TestApplyStoredSettingsRejectsUnsafeValues(t *testing.T) {
 		"low threshold":       {"offline_threshold": "1"},
 		"invalid interval":    {"scan_interval": "soon"},
 		"invalid port toggle": {"enable_port_scan": "sometimes"},
+		"missing interface":   {"scan_interface": "meowtopo-interface-that-does-not-exist"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := applyStoredSettings(base, settings); err == nil {

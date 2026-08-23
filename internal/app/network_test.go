@@ -23,3 +23,12 @@ func TestNormalizeMAC(t *testing.T) {
 		t.Fatal("invalid MAC accepted")
 	}
 }
+
+func TestInterfaceIPv4(t *testing.T) {
+	if ip, err := interfaceIPv4(""); err != nil || ip != nil {
+		t.Fatalf("automatic interface should not bind a source IP: %v %v", ip, err)
+	}
+	if _, err := interfaceIPv4("meowtopo-interface-that-does-not-exist"); err == nil {
+		t.Fatal("missing interface accepted")
+	}
+}

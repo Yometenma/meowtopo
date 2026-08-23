@@ -75,6 +75,43 @@ func isVirtual(n string) bool {
 	}
 	return false
 }
+func interfaceIPv4(name string) (net.IP, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, nil
+	}
+	in, err := net.InterfaceByName(name)
+	if err != nil {
+		return nil, fmt.Errorf("扫描接口 %q 不存在", name)
+	}
+	addrs, err := in.Addrs()
+	if err != nil {
+		return nil, fmt.Errorf("读取扫描接口 %q: %w", name, err)
+	}
+	var fallback net.IP
+	for _, addr := range addrs {
+		var ip net.IP
+		switch value := addr.(type) {
+		case *net.IPNet:
+			ip = value.IP.To4()
+		case *net.IPAddr:
+			ip = value.IP.To4()
+		}
+		if ip == nil {
+			continue
+		}
+		if ip.IsPrivate() {
+			return append(net.IP(nil), ip...), nil
+		}
+		if fallback == nil {
+			fallback = append(net.IP(nil), ip...)
+		}
+	}
+	if fallback != nil {
+		return fallback, nil
+	}
+	return nil, fmt.Errorf("扫描接口 %q 没有 IPv4 地址", name)
+}
 func linuxGateways() []string {
 	f, e := os.Open("/proc/net/route")
 	if e != nil {

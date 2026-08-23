@@ -61,6 +61,9 @@ func loadConfig() Config {
 }
 
 func applyStoredSettings(c Config, settings map[string]string) (Config, error) {
+	if v, ok := settings["scan_interface"]; ok {
+		c.Interface = strings.TrimSpace(v)
+	}
 	if v := strings.TrimSpace(settings["scan_cidrs"]); v != "" {
 		c.CIDRs = nil
 		for _, raw := range strings.Split(v, ",") {
@@ -104,6 +107,9 @@ func applyStoredSettings(c Config, settings map[string]string) (Config, error) {
 			return c, fmt.Errorf("端口探测开关无效")
 		}
 		c.EnablePortScan = b
+	}
+	if _, err := interfaceIPv4(c.Interface); err != nil {
+		return c, err
 	}
 	return c, nil
 }
