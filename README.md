@@ -1,107 +1,279 @@
 # MeowTopo · 喵拓
 
-**Home Network Topology** — *Your LAN, connected.*
+轻量、可自托管的家庭局域网拓扑监控工具。
 
-MeowTopo 是一个面向家庭与 Homelab 的轻量级局域网拓扑监控 Web 应用。它自动发现私有 IPv4 网络中的设备，以可交互节点图展示逻辑拓扑，并把设备、用户修正的关系和画布位置保存在本地 SQLite 文件中。
+MeowTopo 会定时查看家庭网络或 Homelab 中有哪些设备，把它们整理成可交互的拓扑图，并在发现新设备、设备离线或重新上线时通过 Telegram 或 Webhook 通知你。程序不需要云服务，设备资料和设置默认都保存在你自己的服务器上。
 
-> 安全提示：MeowTopo 第一版没有登录系统，默认仅监听 `127.0.0.1`。Docker Compose 面向受信任家庭局域网监听所有地址，请勿把端口直接映射到互联网。
+> MeowTopo 仍在开发中，已经可以部署试用，但暂不建议直接暴露到公网。当前没有登录系统，默认本地运行只监听 `127.0.0.1`；Docker 示例面向受信任的家庭局域网。
 
-## 第一版功能
+## 现在可以做什么
 
-- 首次启动中文向导：接口、IPv4、推荐 CIDR、网关、Docker 虚拟接口与数据目录检测
-- 仅允许 RFC 1918 私网、单次最多 1,024 地址、并发上限 128，同一时刻只有一个扫描任务
-- 后台轻量 TCP 可达性与可选常用端口探测，反向 DNS；记录探测方式和开放端口，并基于主机名、端口做保守的设备类型推测；扫描进度通过 SSE 实时显示
-- 在线、疑似离线、离线、未知状态；连续失败达到阈值才离线
-- Cytoscape.js 交互拓扑、拖动位置保存、固定、搜索、缩放、适应与自动布局
-- Internet/主网关初始化、低置信度推测连接、用户指定父设备/连接方式
-- 设备名称、类型、备注、隐藏与手工无 IP 节点；扫描绝不覆盖用户字段
-- 设备管理支持按状态、类型和显示状态筛选，可批量隐藏、恢复、清除新设备标记和修改父设备，并可删除手工节点
-- 运行记录集中展示最近的扫描结果和设备上线、疑似离线、离线变化
-- 外部通知支持 Telegram 和通用 Webhook，可选择推送新设备、离线、重新上线和扫描异常，并可从设置页发送测试消息
-- 浅色/深色主题、移动端基础适配、减少动态效果偏好
-- ZIP 备份与经过大小、格式、完整性校验的恢复
-- 单一 Go 服务、单一 SQLite 数据文件、嵌入式静态前端，无遥测、无云依赖
+- 自动发现私有 IPv4 局域网中的设备
+- 显示在线、疑似离线、离线和未知状态
+- 用拓扑图展示设备之间的逻辑关系
+- 自动保存节点位置，也可以固定和重新排列
+- 修改设备名称、类型、备注、父设备和连接方式
+- 搜索、筛选、隐藏以及批量整理设备
+- 查看最近的扫描记录和设备状态变化
+- 发现新设备、设备离线、重新上线或扫描异常时发送通知
+- 支持 Telegram 和通用 Webhook
+- 备份、恢复全部数据和设置
+- 浅色/深色主题和基础手机页面适配
 
-## Docker 部署
+MeowTopo 没有遥测、广告、云同步或必须注册的在线账户，也不会尝试登录设备、猜测密码、扫描漏洞或抓取设备网页。
 
-要求 Docker 与 Compose 插件：
+## 推荐部署方式：Docker
+
+适合装有 Linux 和 Docker 的家庭服务器、NAS 或 Homelab 主机。
+
+### 1. 下载项目
+
+```bash
+git clone https://github.com/Yometenma/meowtopo.git
+cd meowtopo
+```
+
+### 2. 启动
 
 ```bash
 docker compose up -d --build
 ```
 
-默认访问 `http://服务器IP:8088`，数据库位于宿主机 `./data/meowtopo.db`。Compose 使用 Linux `network_mode: host`，这是发现真实家庭网络接口并避免把容器 bridge 网关误认为主路由的推荐方式。
+第一次构建需要下载 Go 和 Alpine 镜像，所需时间取决于网络。启动后在浏览器打开：
 
-容器使用非 root 用户并启用 `no-new-privileges`。示例只添加 `NET_RAW`，用于发送 ICMP Echo；权限不足或设备不响应时自动回退到非侵入式 TCP connect。探测不执行 HTTP 请求、漏洞检测或口令尝试，也不需要 `NET_ADMIN`，更不使用 `privileged: true`。
-
-ARM64 可通过多架构构建：
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t meowtopo/meowtopo:latest .
+```text
+http://服务器IP:8088
 ```
 
-## 本地运行
+例如服务器地址是 `192.168.1.10`，就访问 `http://192.168.1.10:8088`。
+
+### 3. 完成首次设置
+
+页面会显示中文向导。通常只需要确认：
+
+1. 用来连接家庭网络的网卡
+2. 要扫描的局域网范围，例如 `192.168.1.0/24`
+3. 路由器地址，例如 `192.168.1.1`
+4. 是否立即执行第一次扫描
+
+如果不确定网段，可以查看电脑或路由器当前的 IP。家庭网络常见范围是 `192.168.x.0/24`、`10.x.x.0/24` 或 `172.16-31.x.0/24`。不要照抄示例，应使用自己网络的真实范围。
+
+### 数据保存在哪里
+
+数据库保存在项目目录下：
+
+```text
+./data/meowtopo.db
+```
+
+`data` 目录挂载在容器外，重新创建或升级容器不会主动删除数据。不要把这个数据库公开或提交到 GitHub，它可能包含家庭设备名称、IP 和 MAC 地址。
+
+### 查看状态和日志
+
+```bash
+docker compose ps
+docker compose logs -f meowtopo
+```
+
+### 停止和重新启动
+
+```bash
+docker compose stop
+docker compose start
+```
+
+如果要移除容器但保留数据：
+
+```bash
+docker compose down
+```
+
+不要随意删除 `data` 目录。
+
+## 不使用 Docker
 
 需要 Go 1.23 或更高版本：
 
 ```bash
+git clone https://github.com/Yometenma/meowtopo.git
+cd meowtopo
 go run ./cmd/meowtopo
 ```
 
-默认访问 `http://127.0.0.1:8088`，数据写入 `./data`。页面所需 Cytoscape.js 已嵌入二进制，运行时不访问 CDN。
+然后打开 `http://127.0.0.1:8088`。数据默认保存在当前目录的 `data` 文件夹中。
 
-## 配置
-
-配置优先级为 Web 保存设置、环境变量、程序默认值。支持：
-
-| 环境变量 | 默认值 | 说明 |
-|---|---:|---|
-| `MEOWTOPO_HTTP_ADDR` | `127.0.0.1:8088` | 监听地址 |
-| `MEOWTOPO_DATA_DIR` | `./data` | 数据目录 |
-| `MEOWTOPO_SCAN_INTERFACE` | 空 | 扫描接口 |
-| `MEOWTOPO_SCAN_CIDRS` | 空 | 逗号分隔 CIDR；第一版扫描首个网段 |
-| `MEOWTOPO_GATEWAY_IP` | 空 | 主网关 |
-| `MEOWTOPO_SCAN_INTERVAL` | `5m` | 自动扫描间隔 |
-| `MEOWTOPO_SCAN_CONCURRENCY` | `32` | 并发，最大 128 |
-| `MEOWTOPO_PING_TIMEOUT` | `800ms` | ICMP 扩展预留超时 |
-| `MEOWTOPO_TCP_TIMEOUT` | `350ms` | 单端口连接超时 |
-| `MEOWTOPO_OFFLINE_THRESHOLD` | `3` | 连续失败离线阈值 |
-| `MEOWTOPO_ENABLE_PORT_SCAN` | `true` | 常用端口探测 |
-| `MEOWTOPO_LOG_LEVEL` | `info` | 日志级别 |
-
-时区读取系统配置，也可通过标准 `TZ` 环境变量覆盖。示例值见 `.env.example`，示例网段绝不写死在程序逻辑中。
-
-## 备份、恢复与升级
-
-设置页的“备份与恢复”可下载 ZIP；备份包含 SQLite 数据库，即设备、地址历史、拓扑、位置、设置与扫描历史。恢复前建议先下载一次当前备份。上传限制为 64 MiB，并验证 ZIP、SQLite 文件头和数据库完整性。
-
-Docker 升级：
+也可以构建单文件程序：
 
 ```bash
-docker compose pull
+go build -trimpath -ldflags="-s -w" -o meowtopo ./cmd/meowtopo
+```
+
+Windows 可以把输出文件名改为 `meowtopo.exe`。
+
+## 设置 Telegram 通知
+
+进入 MeowTopo 的“设置 → 外部通知”。
+
+### 1. 创建机器人
+
+1. 在 Telegram 中打开 `@BotFather`
+2. 发送 `/newbot`
+3. 按提示设置机器人名称
+4. 保存 BotFather 返回的 Bot Token
+
+Token 相当于机器人的密码，不要发给别人，也不要放进截图、日志或公开仓库。
+
+### 2. 获取 Chat ID
+
+私聊通知：先打开刚创建的机器人并发送一条消息，然后访问：
+
+```text
+https://api.telegram.org/bot你的Token/getUpdates
+```
+
+返回内容中的 `chat.id` 就是 Chat ID。
+
+群组通知：把机器人加入群组，在群里发送一条消息，再使用同一个 `getUpdates` 地址查看 Chat ID。群组或频道的 ID 经常以负号开头；频道通常还需要把机器人设为管理员。
+
+### 3. 在喵拓中测试
+
+1. 勾选“启用外部通知”
+2. 勾选“启用 Telegram”
+3. 填写 Bot Token 和 Chat ID
+4. 选择需要推送的事件
+5. 点击“保存并发送测试消息”
+
+看到测试消息后，后续扫描发现变化就会自动推送。同一次扫描中的多个变化会合并成一条消息，减少刷屏。推送失败不会阻止正常扫描。
+
+页面重新打开时不会完整显示已保存的 Token，但 Token 仍保存在本地数据库中，因此数据库备份也应妥善保管。
+
+## 通用 Webhook
+
+在“设置 → 外部通知”中填写一个完整的 `http://` 或 `https://` 地址。MeowTopo 会使用 `POST` 发送 JSON：
+
+```json
+{
+  "title": "喵拓网络动态",
+  "message": "发现新设备：客厅电视（192.168.1.20）",
+  "event": "scan",
+  "source": "MeowTopo"
+}
+```
+
+Webhook 可以接入自建通知服务、自动化平台或消息转发器。接收端返回 HTTP 2xx 即视为成功。
+
+## 备份、恢复和升级
+
+在“设置 → 备份与恢复”中可以下载 ZIP 备份。备份包含设备、拓扑关系、节点位置、扫描记录、通知配置和其他设置。
+
+升级前建议先下载备份，然后执行：
+
+```bash
+git pull
 docker compose up -d --build
 ```
 
-`./data` 挂载在容器外，升级不会主动删除数据库。任何大版本升级前都应备份。
+恢复会替换当前数据库。恢复前最好再下载一次现有备份，以免误操作。
 
-## 扫描与拓扑限制
+## 扫描是怎样工作的
 
-第一版综合 ICMP、少量 TCP 端口、反向 DNS 和 Linux ARP 表；设备类型识别是带来源与可信度的保守推测，用户手工类型始终优先。禁止 Ping 且没有开放探测端口的休眠手机仍可能显示疑似离线。厂商 OUI、mDNS 与更完整的邻居表适配尚未实现。应用不会伪造物理拓扑：没有 SNMP、LLDP、交换机转发表或厂商控制器时，无法判断 LAN 口、无管理交换机层级、实际 AP 或有线/无线方式。自动连接明确标为低置信度“推测”，用户修正后成为手工连接。
+MeowTopo 综合使用 ICMP、少量常用 TCP 端口、反向 DNS 和系统邻居信息判断设备是否可达。扫描受到以下限制：
 
-第一版完整处理一个扫描网段；数据模型和配置允许多个 CIDR，但多网段并行调度仍属后续工作。当前也没有登录、通知、PWA、VLAN、延迟曲线或控制器插件。
+- 只接受 RFC 1918 私有 IPv4 网段
+- 单次最多检查 1,024 个地址
+- 扫描并发最大 128
+- 同一时间只运行一个扫描任务
+- 连续失败达到设置次数后才判定离线
+- 端口探测可以关闭
 
-## 测试
+休眠手机、禁止 Ping 的设备或没有开放常用端口的设备可能暂时显示为疑似离线。可以增加离线判定次数，或把特殊设备设为忽略离线判断。
+
+## 为什么拓扑关系可能不准确
+
+普通家庭网络通常不会提供交换机端口、无线接入点和真实线缆关系。没有 SNMP、LLDP、交换机转发表或厂商控制器数据时，MeowTopo 只能给出低可信度的逻辑推测，不能声称它是真实物理拓扑。
+
+你可以在设备详情中手工指定父设备和连接方式。手工修改会被保留，后续扫描不会覆盖设备名称、类型、备注、连接关系或节点位置。
+
+## 常见问题
+
+### 扫描不到任何设备
+
+- 确认选择的是连接家庭网络的真实网卡，而不是 Docker、VPN 或虚拟机网卡
+- 确认扫描网段与服务器 IP 属于同一网络
+- 检查服务器防火墙和容器权限
+- 某些设备不响应 Ping，可以启用端口探测
+
+### Docker 中只能看到宿主机或容器地址
+
+项目的 Compose 配置使用 Linux `network_mode: host`，让容器直接使用宿主机网络。推荐在 Linux 服务器上部署；Docker Desktop 的网络行为与原生 Linux 不完全相同，扫描结果可能受限制。
+
+### 设备经常在上线和离线之间变化
+
+手机和节能设备休眠时经常不响应。可以在设置中提高“离线阈值”，或者对该设备启用“忽略离线判定”。
+
+### Telegram 测试失败
+
+- 确认机器人 Token 没有多余空格
+- 确认已经先给机器人发送过消息
+- 群组或频道的 Chat ID 可能以负号开头
+- 频道通知需要给机器人发送消息的权限
+- 确认服务器能够访问 `api.telegram.org`
+
+### 能否直接开放到公网
+
+不建议。MeowTopo 当前没有账号和登录功能。需要远程访问时，应使用可信 VPN，或在反向代理前增加可靠的身份验证和 HTTPS。
+
+## 环境变量
+
+大多数设置可以直接在网页中修改。下面的环境变量适合首次启动或自动化部署：
+
+| 环境变量 | 默认值 | 说明 |
+|---|---:|---|
+| `MEOWTOPO_HTTP_ADDR` | `127.0.0.1:8088` | 网页监听地址 |
+| `MEOWTOPO_DATA_DIR` | `./data` | 数据目录 |
+| `MEOWTOPO_SCAN_INTERFACE` | 空 | 扫描使用的网卡名称 |
+| `MEOWTOPO_SCAN_CIDRS` | 空 | 扫描网段；当前完整处理第一个网段 |
+| `MEOWTOPO_GATEWAY_IP` | 空 | 主路由器地址 |
+| `MEOWTOPO_SCAN_INTERVAL` | `5m` | 自动扫描间隔 |
+| `MEOWTOPO_SCAN_CONCURRENCY` | `32` | 同时探测数量，最大 128 |
+| `MEOWTOPO_PING_TIMEOUT` | `800ms` | Ping 等待时间 |
+| `MEOWTOPO_TCP_TIMEOUT` | `350ms` | TCP 连接等待时间 |
+| `MEOWTOPO_OFFLINE_THRESHOLD` | `3` | 连续失败多少次后离线 |
+| `MEOWTOPO_ENABLE_PORT_SCAN` | `true` | 是否探测少量常用端口 |
+| `MEOWTOPO_LOG_LEVEL` | `info` | 日志级别 |
+
+网页中保存的设置优先于环境变量。时区默认跟随系统，也可以使用标准 `TZ` 环境变量，例如 `TZ=Asia/Shanghai`。
+
+示例见 [.env.example](.env.example)。
+
+## 当前开发状态
+
+目前适合在受信任的家庭网络中试用。仍计划继续完善：
+
+- 每台设备的延迟和在线历史曲线
+- 重要设备与通知冷却
+- Bark、Server酱等更多通知渠道
+- 多网段完整扫描
+- 更完整的设备识别
+- 登录保护和更好的手机端界面
+- 拓扑外观和二次元视觉细节
+
+欢迎提交问题，但请在截图和日志中遮住真实 IP、MAC、主机名、域名、Token 和其他家庭网络信息。
+
+## 开发检查
 
 ```bash
 go test ./...
 go vet ./...
-docker build -t meowtopo/meowtopo:local .
+node --check internal/app/web/app.js
+go build -trimpath -ldflags="-s -w" -o meowtopo ./cmd/meowtopo
+docker compose config
 ```
 
-测试数据使用虚构私有地址。仓库忽略运行数据库、日志和 `data` 目录，不应提交真实家庭网络信息。
+贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请参阅 [SECURITY.md](SECURITY.md)。
 
-## 许可
+## 许可证
 
-代码采用 [MIT](LICENSE) 许可证。Topo酱图片与角色美术**不包含在 MIT 许可中**，在素材许可最终确定前版权保留，详见 [ASSETS_LICENSE.md](ASSETS_LICENSE.md)。Cytoscape.js 使用其 MIT 许可证。
+程序代码采用 [MIT](LICENSE) 许可证。
 
-贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全报告见 [SECURITY.md](SECURITY.md)。
+Topo酱图片和角色素材不属于 MIT 许可证，版权与使用限制详见 [ASSETS_LICENSE.md](ASSETS_LICENSE.md)。未经明确许可，请勿提取、替换、修改或单独重新分发正式角色素材。Cytoscape.js 使用其 MIT 许可证。
