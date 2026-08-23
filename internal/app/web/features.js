@@ -200,6 +200,20 @@ refresh = async function (...args) {
   return result;
 };
 
+const originalActivityLoad = loadActivity;
+loadActivity = async function () {
+  await originalActivityLoad();
+  const events = document.querySelectorAll('#statusEventList .activity-item');
+  const scans = document.querySelectorAll('#scanHistoryList .activity-item');
+  const eventCount = document.querySelector('#activityEventCount');
+  const scanCount = document.querySelector('#activityScanCount');
+  const latest = document.querySelector('#activityLatestTime');
+  if (eventCount) eventCount.textContent = events.length;
+  if (scanCount) scanCount.textContent = scans.length;
+  const latestText = events[0]?.querySelector('small')?.textContent?.split(' · ').pop() || scans[0]?.querySelector('small')?.textContent?.split(' · ')[0] || '暂无';
+  if (latest) latest.textContent = latestText;
+};
+
 const originalManagerRender = renderManager;
 renderManager = function () {
   originalManagerRender();
@@ -251,6 +265,30 @@ bind = function () {
   ensureMaintenanceUI();
   originalBind();
   ensureDashboardChrome();
+  const overview = document.querySelector('#overviewNav');
+  const navPages = [
+    [document.querySelector('#manageBtn'), document.querySelector('#managerClose')],
+    [document.querySelector('#activityBtn'), document.querySelector('#activityClose')],
+    [document.querySelector('#settingsBtn'), document.querySelector('#settingsForm button[value="cancel"]')],
+    [document.querySelector('#accountBtn'), document.querySelector('#accountClose')]
+  ];
+  const closeWorkspacePages = () => ['managerDialog', 'activityDialog', 'settingsDialog', 'accountDialog'].forEach(id => {
+    const dialog = document.querySelector(`#${id}`);
+    if (dialog?.open) dialog.close();
+  });
+  const activateNav = button => document.querySelectorAll('.sidebar-nav .nav-button').forEach(item => item.classList.toggle('active', item === button));
+  navPages.forEach(([open, close]) => {
+    if (open) {
+      const action = open.onclick;
+      open.onclick = async event => { closeWorkspacePages(); activateNav(open); return action?.call(open, event); };
+    }
+    if (close) {
+      const action = close.onclick;
+      close.onclick = event => { activateNav(overview); return action?.call(close, event); };
+    }
+  });
+  ['managerDialog', 'activityDialog', 'settingsDialog', 'accountDialog'].forEach(id => document.querySelector(`#${id}`)?.addEventListener('close', () => activateNav(overview)));
+  if (overview) overview.onclick = () => { closeWorkspacePages(); activateNav(overview); cy?.fit(undefined, 60); };
   document.querySelectorAll('[data-activity-pane]').forEach(button => button.onclick = () => {
     document.querySelectorAll('[data-activity-pane]').forEach(item => item.classList.toggle('active', item === button));
     document.querySelectorAll('[data-activity-content]').forEach(pane => pane.classList.toggle('hidden', pane.dataset.activityContent !== button.dataset.activityPane));
