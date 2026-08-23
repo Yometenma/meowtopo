@@ -23,11 +23,12 @@ import (
 var webFS embed.FS
 
 type Server struct {
-	cfg     Config
-	store   *Store
-	scanner *Scanner
-	events  *EventHub
-	version string
+	cfg             Config
+	store           *Store
+	scanner         *Scanner
+	events          *EventHub
+	version         string
+	intervalUpdates chan time.Duration
 }
 
 func Run(version string) error {
@@ -40,35 +41,41 @@ func Run(version string) error {
 		return err
 	}
 	defer st.db.Close()
-	hub := newHub()
-	srv := &Server{cfg: c, store: st, events: hub, version: version}
-	srv.scanner = &Scanner{store: st, cfg: c, events: hub}
 	settings, _ := st.settings()
-	if v := settings["scan_cidrs"]; v != "" {
-		c.CIDRs = strings.Split(v, ",")
-		srv.scanner.cfg.CIDRs = c.CIDRs
+	c, err = applyStoredSettings(c, settings)
+	if err != nil {
+		return fmt.Errorf("读取已保存设置: %w", err)
 	}
-	if v := settings["offline_threshold"]; v != "" {
-		if n, e := strconv.Atoi(v); e == nil {
-			srv.scanner.cfg.OfflineThreshold = n
-		}
-	}
+	hub := newHub()
+	srv := &Server{cfg: c, store: st, events: hub, version: version, intervalUpdates: make(chan time.Duration, 1)}
+	srv.scanner = &Scanner{store: st, cfg: c, events: hub}
 	mux := http.NewServeMux()
 	srv.routes(mux)
 	h := securityHeaders(logRequests(mux))
 	httpSrv := &http.Server{Addr: c.HTTPAddr, Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second}
-	if c.ScanInterval > 0 {
-		go srv.schedule(c.ScanInterval)
-	}
+	go srv.schedule(c.ScanInterval)
 	slog.Info("MeowTopo started", "address", c.HTTPAddr, "data", c.DataDir)
 	return httpSrv.ListenAndServe()
 }
 func (s *Server) schedule(interval time.Duration) {
-	t := time.NewTicker(interval)
+	t := time.NewTimer(interval)
 	defer t.Stop()
-	for range t.C {
-		if len(s.scanner.cfg.CIDRs) > 0 {
-			_ = s.scanner.Start(s.scanner.cfg.CIDRs[0])
+	for {
+		select {
+		case <-t.C:
+			cfg := s.scanner.config()
+			if len(cfg.CIDRs) > 0 {
+				_ = s.scanner.Start(cfg.CIDRs[0])
+			}
+			t.Reset(interval)
+		case interval = <-s.intervalUpdates:
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
+			t.Reset(interval)
 		}
 	}
 }
@@ -255,8 +262,8 @@ func (s *Server) pingDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	ok, lat := s.scanner.probe(ctx, d.IP)
-	jsonOut(w, 200, map[string]any{"reachable": ok, "latency_ms": lat, "method": "tcp_connect"})
+	ok, lat, method := s.scanner.probe(ctx, d.IP)
+	jsonOut(w, 200, map[string]any{"reachable": ok, "latency_ms": lat, "method": method})
 }
 func (s *Server) position(w http.ResponseWriter, r *http.Request) {
 	id, e := idParam(r)
@@ -395,12 +402,51 @@ func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	current, _ := s.store.settings()
+	for key, value := range v {
+		if !allowedSetting(key) {
+			continue
+		}
+		switch value := value.(type) {
+		case string:
+			current[key] = value
+		case bool:
+			current[key] = strconv.FormatBool(value)
+		case float64:
+			if value != float64(int(value)) {
+				fail(w, 400, "invalid_setting", "数值设置必须是整数")
+				return
+			}
+			current[key] = strconv.Itoa(int(value))
+		default:
+			fail(w, 400, "invalid_setting", "设置值类型无效")
+			return
+		}
+	}
+	nextCfg, e := applyStoredSettings(s.scanner.config(), current)
+	if e != nil {
+		fail(w, 400, "invalid_setting", e.Error())
+		return
+	}
 	if e := s.store.saveSettings(v); e != nil {
 		fail(w, 500, "database_error", e.Error())
 		return
 	}
 	if raw, ok := v["gateway_ip"].(string); ok && raw != "" {
 		_ = s.store.ensureCore(raw)
+	}
+	oldInterval := s.scanner.config().ScanInterval
+	s.scanner.UpdateConfig(nextCfg)
+	if nextCfg.ScanInterval != oldInterval {
+		select {
+		case s.intervalUpdates <- nextCfg.ScanInterval:
+		default:
+			select {
+			case <-s.intervalUpdates:
+			default:
+			}
+			s.intervalUpdates <- nextCfg.ScanInterval
+		}
 	}
 	jsonOut(w, 200, map[string]bool{"saved": true})
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -57,4 +58,52 @@ func loadConfig() Config {
 		c.OfflineThreshold = 20
 	}
 	return c
+}
+
+func applyStoredSettings(c Config, settings map[string]string) (Config, error) {
+	if v := strings.TrimSpace(settings["scan_cidrs"]); v != "" {
+		c.CIDRs = nil
+		for _, raw := range strings.Split(v, ",") {
+			raw = strings.TrimSpace(raw)
+			if _, _, err := validateCIDR(raw); err != nil {
+				return c, err
+			}
+			c.CIDRs = append(c.CIDRs, raw)
+		}
+	}
+	if v := strings.TrimSpace(settings["scan_concurrency"]); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 128 {
+			return c, fmt.Errorf("扫描并发数量必须在 1 到 128 之间")
+		}
+		c.Concurrency = n
+	}
+	if v := strings.TrimSpace(settings["offline_threshold"]); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 2 || n > 20 {
+			return c, fmt.Errorf("离线判定次数必须在 2 到 20 之间")
+		}
+		c.OfflineThreshold = n
+	}
+	for key, target := range map[string]*time.Duration{
+		"scan_interval": &c.ScanInterval,
+		"ping_timeout":  &c.PingTimeout,
+		"tcp_timeout":   &c.TCPTimeout,
+	} {
+		if v := strings.TrimSpace(settings[key]); v != "" {
+			d, err := time.ParseDuration(v)
+			if err != nil || d <= 0 {
+				return c, fmt.Errorf("%s 必须是有效的正数时长", key)
+			}
+			*target = d
+		}
+	}
+	if v := strings.TrimSpace(settings["enable_port_scan"]); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, fmt.Errorf("端口探测开关无效")
+		}
+		c.EnablePortScan = b
+	}
+	return c, nil
 }

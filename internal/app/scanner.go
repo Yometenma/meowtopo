@@ -31,6 +31,16 @@ type Scanner struct {
 }
 
 func (s *Scanner) Status() ScanStatus { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
+func (s *Scanner) UpdateConfig(cfg Config) {
+	s.mu.Lock()
+	s.cfg = cfg
+	s.mu.Unlock()
+}
+func (s *Scanner) config() Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg
+}
 func (s *Scanner) Start(cidr string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -52,13 +62,14 @@ func (s *Scanner) Start(cidr string) error {
 	return nil
 }
 func (s *Scanner) run(n *net.IPNet) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.Status().Total)*s.cfg.TCPTimeout+2*time.Minute)
+	cfg := s.config()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.Status().Total)*cfg.TCPTimeout+2*time.Minute)
 	defer cancel()
 	jobs := make(chan string)
 	seen := map[string]bool{}
-	var sm sync.Mutex
+	var seenMu sync.Mutex
 	var wg sync.WaitGroup
-	workers := s.cfg.Concurrency
+	workers := cfg.Concurrency
 	if workers > s.Status().Total {
 		workers = s.Status().Total
 	}
@@ -67,12 +78,11 @@ func (s *Scanner) run(n *net.IPNet) {
 		go func() {
 			defer wg.Done()
 			for ip := range jobs {
-				alive, lat := s.probe(ctx, ip)
-				sm.Lock()
-				s.status.Scanned++
+				alive, lat, _ := s.probe(ctx, ip)
 				if alive {
-					s.status.Found++
+					seenMu.Lock()
 					seen[ip] = true
+					seenMu.Unlock()
 					host := ""
 					if names, _ := net.LookupAddr(ip); len(names) > 0 {
 						host = names[0]
@@ -81,8 +91,13 @@ func (s *Scanner) run(n *net.IPNet) {
 					d, _ := s.store.upsertSeen(ip, mac, host, guessType(host), lat)
 					s.events.Emit("device_seen", d)
 				}
+				s.mu.Lock()
+				s.status.Scanned++
+				if alive {
+					s.status.Found++
+				}
 				st := s.status
-				sm.Unlock()
+				s.mu.Unlock()
 				if st.Scanned%10 == 0 || st.Scanned == st.Total {
 					s.events.Emit("scan_progress", st)
 				}
@@ -99,7 +114,7 @@ sendLoop:
 	}
 	close(jobs)
 	wg.Wait()
-	_ = s.store.markMisses(seen, s.cfg.OfflineThreshold)
+	_ = s.store.markMisses(seen, cfg.OfflineThreshold)
 	if set, _ := s.store.settings(); set["gateway_ip"] != "" {
 		_ = s.store.ensureCore(set["gateway_ip"])
 	}
@@ -118,24 +133,31 @@ sendLoop:
 	_, _ = s.store.db.Exec(`UPDATE scan_runs SET finished_at=?,status=?,scanned_addresses=?,found_devices=?,error_summary=? WHERE id=?`, st.FinishedAt, state, st.Scanned, st.Found, st.Error, st.RunID)
 	s.events.Emit("scan_completed", st)
 }
-func (s *Scanner) probe(ctx context.Context, ip string) (bool, float64) {
-	if ok, latency := icmpProbe(ip, s.cfg.PingTimeout); ok {
-		return true, latency
+func (s *Scanner) probe(ctx context.Context, ip string) (bool, float64, string) {
+	cfg := s.config()
+	if ok, latency := icmpProbe(ip, cfg.PingTimeout); ok {
+		return true, latency, "icmp"
 	}
-	ports := []int{80, 443, 22, 445, 53, 8123, 32400}
-	if !s.cfg.EnablePortScan {
-		ports = []int{80, 443}
+	if !cfg.EnablePortScan {
+		return false, 0, ""
 	}
+	ports := probePorts(cfg.EnablePortScan)
 	start := time.Now()
 	for _, p := range ports {
-		d := net.Dialer{Timeout: s.cfg.TCPTimeout}
+		d := net.Dialer{Timeout: cfg.TCPTimeout}
 		c, e := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", ip, p))
 		if e == nil {
 			c.Close()
-			return true, float64(time.Since(start).Microseconds()) / 1000
+			return true, float64(time.Since(start).Microseconds()) / 1000, "tcp_connect"
 		}
 	}
-	return false, 0
+	return false, 0, ""
+}
+func probePorts(enabled bool) []int {
+	if !enabled {
+		return nil
+	}
+	return []int{80, 443, 22, 445, 53, 8123, 32400}
 }
 func icmpProbe(target string, timeout time.Duration) (bool, float64) {
 	addr := net.ParseIP(target)
@@ -149,7 +171,7 @@ func icmpProbe(target string, timeout time.Duration) (bool, float64) {
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(timeout))
 	id := os.Getpid() & 0xffff
-	msg := []byte{8, 0, 0, 0, byte(id >> 8), byte(id), 0, 1, 'M', 'o', 'e', 'T', 'o', 'p', 'o'}
+	msg := []byte{8, 0, 0, 0, byte(id >> 8), byte(id), 0, 1, 'M', 'e', 'o', 'w', 'T', 'o', 'p', 'o'}
 	cs := icmpChecksum(msg)
 	msg[2], msg[3] = byte(cs>>8), byte(cs)
 	start := time.Now()
