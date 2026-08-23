@@ -141,6 +141,14 @@ const originalBind = bind;
 bind = function () {
   ensureMaintenanceUI();
   originalBind();
+  [document.querySelector('#wizardLater'), document.querySelector('#settingsForm button[value="cancel"]'), document.querySelector('#manualForm button[value="cancel"]')].filter(Boolean).forEach(button => {
+    button.type = 'button';
+    button.onclick = () => {
+      const form = button.closest('form');
+      form?.reset();
+      button.closest('dialog')?.close('cancel');
+    };
+  });
   const restore = document.querySelector('#restoreFile');
   if (!restore) return;
   restore.onchange = async event => {
