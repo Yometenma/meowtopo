@@ -55,6 +55,8 @@ docker compose version
 > [!NOTE]
 > 当前 Compose 会在本机从源码构建镜像，不是从 Docker Hub 下载现成镜像。首次启动需要访问 GitHub、Go 模块源和 Docker 镜像仓库。
 
+容器首次启动时会自动处理 `./data` 目录权限，然后以固定的非管理员用户运行 MeowTopo，不需要手动执行 `chown`。如果数据目录位于不允许容器修改权限的 NFS 或特殊 NAS 共享中，请先在宿主机上将该目录设置为 UID/GID `10001:10001` 可写。
+
 ### 启动
 
 ```bash
