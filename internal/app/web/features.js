@@ -126,6 +126,57 @@ function ensureMaintenanceUI() {
   };
 }
 
+function shellIcon(name) {
+  const paths = {
+    home: '<path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9 20v-6h6v6"/>',
+    devices: '<rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8m-4-4v4M7 9h.01m4 0h6"/>',
+    activity: '<path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+    layout: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="m7.7 7.1 3.2 8.8m5.4-8.8-3.2 8.8M8 6h8"/>',
+    fit: '<path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
+}
+
+function ensureDashboardChrome() {
+  if (document.querySelector('#appSidebar')) return;
+  document.body.classList.add('dashboard-shell');
+  const header = document.querySelector('.topbar');
+  const main = document.querySelector('main');
+  const sidebar = document.createElement('aside');
+  sidebar.id = 'appSidebar';
+  sidebar.className = 'app-sidebar';
+  sidebar.innerHTML = '<nav class="sidebar-nav"></nav><div class="sidebar-foot"><span class="sidebar-pulse"></span><span>本地运行中</span></div>';
+  document.querySelector('#app').insertBefore(sidebar, header);
+
+  const brand = document.querySelector('#homeBtn');
+  sidebar.insertBefore(brand, sidebar.firstChild);
+  brand.onclick = () => cy?.fit(undefined, 60);
+  const nav = sidebar.querySelector('.sidebar-nav');
+  const entries = [
+    [document.querySelector('#manageBtn'), 'devices', '设备管理'],
+    [document.querySelector('#activityBtn'), 'activity', '运行记录'],
+    [document.querySelector('#settingsBtn'), 'settings', '系统设置']
+  ];
+  entries.forEach(([button, icon, label]) => {
+    button.classList.remove('primary');
+    button.classList.add('nav-button');
+    button.innerHTML = `${shellIcon(icon)}<span>${label}</span>`;
+    nav.appendChild(button);
+  });
+  nav.insertAdjacentHTML('afterbegin', `<button type="button" class="nav-button active" id="overviewNav">${shellIcon('home')}<span>拓扑总览</span></button>`);
+  document.querySelector('#overviewNav').onclick = () => cy?.fit(undefined, 60);
+
+  header.insertAdjacentHTML('afterbegin', '<div class="page-heading"><small>家庭网络中心</small><strong>网络拓扑</strong></div>');
+  const toolbar = document.createElement('div');
+  toolbar.className = 'canvas-toolbar';
+  main.querySelector('#canvasPage').appendChild(toolbar);
+  const layout = document.querySelector('#layoutBtn'), fit = document.querySelector('#fitBtn');
+  layout.innerHTML = `${shellIcon('layout')}<span>整理布局</span>`;
+  fit.innerHTML = `${shellIcon('fit')}<span>适应画布</span>`;
+  toolbar.append(layout, fit);
+}
+
 async function loadMaintenanceStatus() {
   const result = document.querySelector('#maintenanceStatus');
   if (!result) return;
@@ -141,6 +192,7 @@ const originalBind = bind;
 bind = function () {
   ensureMaintenanceUI();
   originalBind();
+  ensureDashboardChrome();
   [document.querySelector('#wizardLater'), document.querySelector('#settingsForm button[value="cancel"]'), document.querySelector('#manualForm button[value="cancel"]')].filter(Boolean).forEach(button => {
     button.type = 'button';
     button.onclick = () => {
