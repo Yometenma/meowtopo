@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type Server struct {
 	version         string
 	intervalUpdates chan time.Duration
 	notifier        *Notifier
+	backupMu        sync.Mutex
 }
 
 func Run(version string) error {
@@ -57,6 +59,7 @@ func Run(version string) error {
 	h := securityHeaders(logRequests(mux))
 	httpSrv := &http.Server{Addr: c.HTTPAddr, Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second}
 	go srv.schedule(c.ScanInterval)
+	go srv.maintain()
 	slog.Info("MeowTopo started", "address", c.HTTPAddr, "data", c.DataDir)
 	return httpSrv.ListenAndServe()
 }
@@ -121,6 +124,8 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("PATCH /api/settings", s.require(PermManageSettings, s.patchSettings))
 	m.Handle("POST /api/notifications/test", s.require(PermManageSettings, s.testNotification))
 	m.Handle("GET /api/backup", s.require(PermManageSettings, s.backup))
+	m.Handle("GET /api/maintenance", s.require(PermManageSettings, s.maintenanceStatus))
+	m.Handle("POST /api/maintenance/backup", s.require(PermManageSettings, s.createAutomaticBackup))
 	m.Handle("POST /api/restore", s.require(PermManageUsers, s.restore))
 	m.Handle("GET /api/events", s.require(PermView, s.sse))
 	root, _ := fs.Sub(webFS, "web")
@@ -641,6 +646,19 @@ func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	for key, bounds := range map[string][2]int{"automatic_backup_keep": {1, 30}, "history_retention_days": {7, 365}} {
+		if raw, ok := v[key].(float64); ok && (raw != float64(int(raw)) || int(raw) < bounds[0] || int(raw) > bounds[1]) {
+			fail(w, 400, "invalid_setting", "备份保留份数或历史保留天数超出范围")
+			return
+		}
+	}
+	if raw, ok := v["automatic_backup_interval"].(string); ok {
+		interval, parseErr := time.ParseDuration(raw)
+		if parseErr != nil || interval < 6*time.Hour || interval > 7*24*time.Hour {
+			fail(w, 400, "invalid_setting", "自动备份间隔必须在 6 小时到 7 天之间")
+			return
+		}
+	}
 	current, _ := s.store.settings()
 	for key, value := range v {
 		if !allowedSetting(key) {
@@ -694,21 +712,33 @@ func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, map[string]bool{"saved": true})
 }
 func (s *Server) backup(w http.ResponseWriter, r *http.Request) {
-	// Move committed WAL pages into the main file so the single-file backup is consistent.
-	if _, e := s.store.db.Exec(`PRAGMA wal_checkpoint(FULL)`); e != nil {
-		fail(w, 500, "backup_failed", "数据库检查点创建失败")
-		return
-	}
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="meowtopo-backup.zip"`)
-	z := zip.NewWriter(w)
-	f, _ := z.Create("meowtopo.db")
-	src, e := os.Open(s.store.path)
-	if e == nil {
-		_, _ = io.Copy(f, src)
-		src.Close()
+	if e := s.writeBackup(w); e != nil {
+		fail(w, 500, "backup_failed", "数据库检查点创建失败")
 	}
-	_ = z.Close()
+}
+
+func (s *Server) writeBackup(dst io.Writer) error {
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+	if _, err := s.store.db.Exec(`PRAGMA wal_checkpoint(FULL)`); err != nil {
+		return err
+	}
+	src, err := os.Open(s.store.path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	z := zip.NewWriter(dst)
+	f, err := z.Create("meowtopo.db")
+	if err == nil {
+		_, err = io.Copy(f, src)
+	}
+	if closeErr := z.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)

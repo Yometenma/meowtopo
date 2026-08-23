@@ -69,7 +69,15 @@ async function loadDeviceHistory(id, hours) {
 
 const originalNotificationValues = notificationValues;
 notificationValues = function () {
-  return {...originalNotificationValues(), notification_cooldown: document.querySelector('#notifyCooldown')?.value || '15m', notification_important_only: document.querySelector('#notifyImportantOnly')?.checked || false};
+  return {
+    ...originalNotificationValues(),
+    notification_cooldown: document.querySelector('#notifyCooldown')?.value || '15m',
+    notification_important_only: document.querySelector('#notifyImportantOnly')?.checked || false,
+    automatic_backup_enabled: document.querySelector('#autoBackupEnabled')?.checked || false,
+    automatic_backup_interval: document.querySelector('#autoBackupInterval')?.value || '24h',
+    automatic_backup_keep: +(document.querySelector('#autoBackupKeep')?.value || 7),
+    history_retention_days: +(document.querySelector('#historyRetentionDays')?.value || 30)
+  };
 };
 
 const originalEnsureNotificationUI = ensureNotificationUI;
@@ -85,11 +93,53 @@ openSettings = async function () {
   await originalOpenSettings();
   document.querySelector('#notifyCooldown').value = settings.notification_cooldown || '15m';
   document.querySelector('#notifyImportantOnly').checked = settings.notification_important_only === 'true';
+  document.querySelector('#autoBackupEnabled').checked = settings.automatic_backup_enabled === 'true';
+  document.querySelector('#autoBackupInterval').value = settings.automatic_backup_interval || '24h';
+  document.querySelector('#autoBackupKeep').value = settings.automatic_backup_keep || 7;
+  document.querySelector('#historyRetentionDays').value = settings.history_retention_days || 30;
+  loadMaintenanceStatus();
   document.querySelector('#setCIDR').placeholder = '多个网段用逗号分隔，例如 192.168.1.0/24,10.0.0.0/24';
 };
 
+function ensureMaintenanceUI() {
+  const pane = document.querySelector('#backupPane');
+  if (!pane || document.querySelector('#autoBackupEnabled')) return;
+  pane.insertAdjacentHTML('beforeend', `
+    <hr><h3>服务器自动备份</h3>
+    <p class="muted">备份保存在 MeowTopo 数据目录的 backups 文件夹，不需要额外程序。</p>
+    <div class="formgrid">
+      <label class="check"><input id="autoBackupEnabled" type="checkbox">启用自动备份</label>
+      <label>备份间隔<select id="autoBackupInterval"><option value="12h">每 12 小时</option><option value="24h">每天</option><option value="72h">每 3 天</option><option value="168h">每周</option></select></label>
+      <label>保留备份份数<input id="autoBackupKeep" type="number" min="1" max="30" value="7"></label>
+      <label>历史记录保留天数<input id="historyRetentionDays" type="number" min="7" max="365" value="30"></label>
+    </div>
+    <button type="button" id="backupNow">立即在服务器创建一份</button>
+    <p id="maintenanceStatus" class="muted">正在读取备份状态…</p>`);
+  document.querySelector('#backupNow').onclick = async () => {
+    const result = document.querySelector('#maintenanceStatus');
+    result.textContent = '正在创建备份…';
+    try {
+      await api('/api/maintenance/backup', {method: 'POST'});
+      toast('服务器备份已创建');
+      loadMaintenanceStatus();
+    } catch (error) { result.textContent = error.message; }
+  };
+}
+
+async function loadMaintenanceStatus() {
+  const result = document.querySelector('#maintenanceStatus');
+  if (!result) return;
+  try {
+    const status = await api('/api/maintenance');
+    if (!status.backup_count) { result.textContent = '服务器上还没有自动备份。'; return; }
+    const last = new Date(status.backups[0].created_at).toLocaleString();
+    result.textContent = `服务器上有 ${status.backup_count} 份备份，最近一份：${last}`;
+  } catch (error) { result.textContent = error.message; }
+}
+
 const originalBind = bind;
 bind = function () {
+  ensureMaintenanceUI();
   originalBind();
   const restore = document.querySelector('#restoreFile');
   if (!restore) return;

@@ -258,7 +258,6 @@ func (s *Store) markMisses(seen map[string]bool, threshold int) error {
 		}
 		_, _ = s.db.Exec(`INSERT INTO device_samples(device_id,checked_at,status,latency_ms,probe_method) VALUES(?,?,?,0,'')`, d.ID, t, status)
 	}
-	_, _ = s.db.Exec(`DELETE FROM device_samples WHERE checked_at < datetime('now','-30 days')`)
 	_ = s.trimStatusEvents(5000)
 	return nil
 }
@@ -324,6 +323,8 @@ func allowedSetting(k string) bool {
 		"notification_new_device", "notification_offline", "notification_online", "notification_scan_error":
 		return true
 	case "notification_cooldown", "notification_important_only":
+		return true
+	case "automatic_backup_enabled", "automatic_backup_interval", "automatic_backup_keep", "history_retention_days":
 		return true
 	}
 	return false
