@@ -135,3 +135,32 @@ func TestScanNotificationCombinesDeviceChanges(t *testing.T) {
 		t.Fatalf("unexpected combined message: %s", message)
 	}
 }
+
+func TestNotificationCooldownPreventsDuplicateMessage(t *testing.T) {
+	count := 0
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+	store := testStore(t)
+	if err := store.saveSettings(map[string]any{
+		"notification_enabled":         true,
+		"notification_webhook_enabled": true,
+		"notification_webhook_url":     receiver.URL,
+		"notification_new_device":      true,
+		"notification_cooldown":        "1h",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	started := now()
+	if _, err := store.upsertSeen(Discovery{IP: "192.168.60.20", Hostname: "test-phone", Type: "phone"}); err != nil {
+		t.Fatal(err)
+	}
+	notifier := newNotifier(store)
+	notifier.NotifyScan(started, ScanStatus{})
+	notifier.NotifyScan(started, ScanStatus{})
+	if count != 1 {
+		t.Fatalf("notification count=%d, want 1", count)
+	}
+}

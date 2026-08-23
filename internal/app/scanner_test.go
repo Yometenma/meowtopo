@@ -54,6 +54,9 @@ func TestIdentifyType(t *testing.T) {
 		{"TP-Link switch model", "TL-SG108E.local.", "switch", "hostname", nil},
 		{"Home Assistant port", "", "iot", "ports", []int{8123}},
 		{"camera port", "", "camera", "ports", []int{554}},
+		{"printer port", "", "printer", "ports", []int{9100}},
+		{"Windows remote desktop", "", "windows", "ports", []int{3389}},
+		{"game console hostname", "living-room-xbox", "game", "hostname", nil},
 		{"DNS web gateway", "", "router", "ports", []int{53, 443}},
 		{"unknown", "living-room", "unknown", "", []int{80}},
 	}
@@ -67,5 +70,15 @@ func TestIdentifyType(t *testing.T) {
 				t.Fatal("identified device has no confidence")
 			}
 		})
+	}
+}
+
+func TestMultipleScanRangesRejectOverlapAndUnsafeRange(t *testing.T) {
+	scanner := &Scanner{store: testStore(t), events: newHub(), cfg: Config{Concurrency: 1}}
+	if err := scanner.Start("192.168.1.0/24,192.168.1.128/25"); err == nil {
+		t.Fatal("overlapping ranges were accepted")
+	}
+	if err := scanner.Start("192.168.1.0/24,8.8.8.0/24"); err == nil {
+		t.Fatal("public range was accepted")
 	}
 }

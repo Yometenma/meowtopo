@@ -57,21 +57,49 @@ func (s *Scanner) Start(cidr string) error {
 	if s.status.Running {
 		return fmt.Errorf("扫描任务已在运行")
 	}
-	n, total, e := validateCIDR(cidr)
-	if e != nil {
-		return e
+	parts := strings.Split(cidr, ",")
+	if len(parts) > 8 {
+		return fmt.Errorf("一次最多扫描 8 个网段")
 	}
+	nets := make([]*net.IPNet, 0, len(parts))
+	total := 0
+	labels := make([]string, 0, len(parts))
+	for _, raw := range parts {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		n, count, e := validateCIDR(raw)
+		if e != nil {
+			return e
+		}
+		for _, existing := range nets {
+			if existing.Contains(n.IP) || n.Contains(existing.IP) {
+				return fmt.Errorf("扫描网段不能互相重叠：%s", raw)
+			}
+		}
+		nets = append(nets, n)
+		total += count
+		labels = append(labels, raw)
+	}
+	if len(nets) == 0 {
+		return fmt.Errorf("请至少填写一个扫描网段")
+	}
+	if total > 65536 {
+		return fmt.Errorf("多个网段合计不能超过 65536 个地址")
+	}
+	cidr = strings.Join(labels, ",")
 	r, e := s.store.db.Exec(`INSERT INTO scan_runs(started_at,status,cidrs,total_addresses)VALUES(?,'running',?,?)`, now(), cidr, total)
 	if e != nil {
 		return e
 	}
 	id, _ := r.LastInsertId()
 	s.status = ScanStatus{Running: true, RunID: id, CIDR: cidr, Total: total, StartedAt: now()}
-	go s.run(n)
+	go s.run(nets)
 	s.events.Emit("scan_started", s.status)
 	return nil
 }
-func (s *Scanner) run(n *net.IPNet) {
+func (s *Scanner) run(nets []*net.IPNet) {
 	cfg := s.config()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.Status().Total)*cfg.TCPTimeout+2*time.Minute)
 	defer cancel()
@@ -116,19 +144,27 @@ func (s *Scanner) run(n *net.IPNet) {
 			}
 		}()
 	}
+	queued := map[string]bool{}
 sendLoop:
-	for ip, broadcast := firstIP(n), lastIP(n); n.Contains(ip) && !ip.Equal(broadcast); ip = nextIP(ip) {
-		select {
-		case jobs <- ip.String():
-		case <-ctx.Done():
-			break sendLoop
+	for _, n := range nets {
+		for ip, broadcast := firstIP(n), lastIP(n); n.Contains(ip) && !ip.Equal(broadcast); ip = nextIP(ip) {
+			address := ip.String()
+			if queued[address] {
+				continue
+			}
+			queued[address] = true
+			select {
+			case jobs <- address:
+			case <-ctx.Done():
+				break sendLoop
+			}
 		}
 	}
 	close(jobs)
 	wg.Wait()
 	for ip, mac := range arpNeighbors() {
 		parsed := net.ParseIP(ip)
-		if parsed == nil || !n.Contains(parsed) || seen[ip] {
+		if parsed == nil || !containsNetwork(nets, parsed) || seen[ip] {
 			continue
 		}
 		seen[ip] = true
@@ -162,6 +198,15 @@ sendLoop:
 	if s.notifier != nil {
 		go s.notifier.NotifyScan(st.StartedAt, st)
 	}
+}
+
+func containsNetwork(nets []*net.IPNet, ip net.IP) bool {
+	for _, network := range nets {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 func applyARPResult(result ProbeResult, mac string) ProbeResult {
 	if !result.Alive && mac != "" {
@@ -214,7 +259,7 @@ func probePorts(enabled bool) []int {
 	if !enabled {
 		return nil
 	}
-	return []int{22, 53, 80, 443, 445, 554, 8123, 32400}
+	return []int{22, 53, 80, 443, 445, 554, 3389, 5000, 8008, 8123, 9100, 32400}
 }
 func icmpProbe(target string, sourceIP net.IP, timeout time.Duration) (bool, float64) {
 	addr := net.ParseIP(target)
@@ -370,10 +415,13 @@ func identifyType(host string, ports []int) (string, string, float64) {
 		{"switch", .89, []string{"switch", "tl-sg", "tl-sl", "-sw-", "sw-core", "core-sw"}},
 		{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr"}},
 		{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet"}},
-		{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly"}},
+		{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly", "tuya", "tasmota", "xiaomi", "yeelight", "aqara", "hue-bridge"}},
 		{"linux", .78, []string{"proxmox", "pve", "esxi", "server", "ubuntu", "debian"}},
-		{"phone", .72, []string{"iphone", "android", "pixel", "phone"}},
-		{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast"}},
+		{"windows", .76, []string{"desktop-", "laptop-", "win-pc", "surface"}},
+		{"macos", .76, []string{"macbook", "imac", "mac-mini"}},
+		{"phone", .72, []string{"iphone", "android", "pixel", "phone", "galaxy", "huawei", "oneplus"}},
+		{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast", "firetv", "roku"}},
+		{"game", .74, []string{"playstation", "xbox", "nintendo", "steamdeck"}},
 	}
 	for _, rule := range hostRules {
 		for _, word := range rule.words {
@@ -389,8 +437,16 @@ func identifyType(host string, ports []int) (string, string, float64) {
 	switch {
 	case open[8123]:
 		return "iot", "ports", .78
+	case open[9100]:
+		return "printer", "ports", .82
 	case open[554]:
 		return "camera", "ports", .72
+	case open[8008]:
+		return "tv", "ports", .66
+	case open[5000] && (open[445] || open[22]):
+		return "nas", "ports", .72
+	case open[3389]:
+		return "windows", "ports", .68
 	case open[32400]:
 		return "nas", "ports", .62
 	case open[53] && (open[80] || open[443]):

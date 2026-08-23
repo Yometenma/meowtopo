@@ -48,6 +48,7 @@ type Device struct {
 	IsHidden       bool    `json:"is_hidden"`
 	IsIgnored      bool    `json:"is_ignored"`
 	AlwaysShow     bool    `json:"always_show"`
+	Important      bool    `json:"is_important"`
 	Manual         bool    `json:"created_manually"`
 	CreatedAt      string  `json:"created_at"`
 	UpdatedAt      string  `json:"updated_at"`
@@ -91,10 +92,12 @@ CREATE TABLE IF NOT EXISTS node_positions(device_id INTEGER PRIMARY KEY,x REAL N
 CREATE TABLE IF NOT EXISTS scan_runs(id INTEGER PRIMARY KEY AUTOINCREMENT,started_at TEXT NOT NULL,finished_at TEXT DEFAULT '',status TEXT NOT NULL,cidrs TEXT NOT NULL,total_addresses INTEGER DEFAULT 0,scanned_addresses INTEGER DEFAULT 0,found_devices INTEGER DEFAULT 0,error_summary TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS status_events(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER,event_type TEXT,old_status TEXT,new_status TEXT,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS device_samples(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER NOT NULL,checked_at TEXT NOT NULL,status TEXT NOT NULL,latency_ms REAL NOT NULL DEFAULT 0,probe_method TEXT NOT NULL DEFAULT '',FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS notification_state(device_id INTEGER NOT NULL,event_type TEXT NOT NULL,last_sent_at TEXT NOT NULL,PRIMARY KEY(device_id,event_type),FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE COLLATE NOCASE,display_name TEXT NOT NULL,password_hash TEXT NOT NULL,permissions INTEGER NOT NULL DEFAULT 1,is_admin INTEGER NOT NULL DEFAULT 0,is_active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_login_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,csrf_token TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,last_seen_at TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id); CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX IF NOT EXISTS idx_events_created ON status_events(created_at);`
+CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX IF NOT EXISTS idx_events_created ON status_events(created_at); CREATE INDEX IF NOT EXISTS idx_samples_device_time ON device_samples(device_id,checked_at);`
 	if _, err := s.db.Exec(q); err != nil {
 		return err
 	}
@@ -103,12 +106,13 @@ CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX I
 		"open_ports":                "TEXT NOT NULL DEFAULT '[]'",
 		"identification_source":     "TEXT NOT NULL DEFAULT ''",
 		"identification_confidence": "REAL NOT NULL DEFAULT 0",
+		"is_important":              "INTEGER NOT NULL DEFAULT 0",
 	} {
 		if err := s.ensureDeviceColumn(name, definition); err != nil {
 			return err
 		}
 	}
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2),(3)`)
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2),(3),(4)`)
 	return err
 }
 func (s *Store) ensureDeviceColumn(name, definition string) error {
@@ -141,9 +145,9 @@ func (s *Store) ensureDeviceColumn(name, definition string) error {
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 func scanDevice(rows interface{ Scan(...any) error }) (Device, error) {
 	var d Device
-	var n, h, ig, a, m, l int
+	var n, h, ig, a, important, m, l int
 	var openPorts string
-	err := rows.Scan(&d.ID, &d.StableKey, &d.MAC, &d.IP, &d.AutoHostname, &d.UserName, &d.Vendor, &d.AutoType, &d.UserType, &d.Icon, &d.Notes, &d.FirstSeen, &d.LastSeen, &d.LastChecked, &d.Status, &d.Latency, &d.ProbeMethod, &openPorts, &d.TypeSource, &d.TypeConfidence, &d.Successes, &d.Failures, &n, &h, &ig, &a, &m, &d.CreatedAt, &d.UpdatedAt, &d.X, &d.Y, &l)
+	err := rows.Scan(&d.ID, &d.StableKey, &d.MAC, &d.IP, &d.AutoHostname, &d.UserName, &d.Vendor, &d.AutoType, &d.UserType, &d.Icon, &d.Notes, &d.FirstSeen, &d.LastSeen, &d.LastChecked, &d.Status, &d.Latency, &d.ProbeMethod, &openPorts, &d.TypeSource, &d.TypeConfidence, &d.Successes, &d.Failures, &n, &h, &ig, &a, &important, &m, &d.CreatedAt, &d.UpdatedAt, &d.X, &d.Y, &l)
 	if err == nil {
 		_ = json.Unmarshal([]byte(openPorts), &d.OpenPorts)
 	}
@@ -151,12 +155,13 @@ func scanDevice(rows interface{ Scan(...any) error }) (Device, error) {
 	d.IsHidden = h != 0
 	d.IsIgnored = ig != 0
 	d.AlwaysShow = a != 0
+	d.Important = important != 0
 	d.Manual = m != 0
 	d.Locked = l != 0
 	return d, err
 }
 
-const deviceSelect = `SELECT d.id,d.stable_key,d.mac_address,d.current_ip,d.auto_hostname,d.user_name,d.vendor,d.auto_device_type,d.user_device_type,d.icon,d.notes,d.first_seen_at,d.last_seen_at,d.last_checked_at,d.status,d.ping_latency_ms,d.probe_method,d.open_ports,d.identification_source,d.identification_confidence,d.consecutive_successes,d.consecutive_failures,d.is_new,d.is_hidden,d.is_ignored,d.always_show,d.created_manually,d.created_at,d.updated_at,COALESCE(p.x,0),COALESCE(p.y,0),COALESCE(p.locked,0) FROM devices d LEFT JOIN node_positions p ON p.device_id=d.id`
+const deviceSelect = `SELECT d.id,d.stable_key,d.mac_address,d.current_ip,d.auto_hostname,d.user_name,d.vendor,d.auto_device_type,d.user_device_type,d.icon,d.notes,d.first_seen_at,d.last_seen_at,d.last_checked_at,d.status,d.ping_latency_ms,d.probe_method,d.open_ports,d.identification_source,d.identification_confidence,d.consecutive_successes,d.consecutive_failures,d.is_new,d.is_hidden,d.is_ignored,d.always_show,d.is_important,d.created_manually,d.created_at,d.updated_at,COALESCE(p.x,0),COALESCE(p.y,0),COALESCE(p.locked,0) FROM devices d LEFT JOIN node_positions p ON p.device_id=d.id`
 
 func (s *Store) devices() (out []Device, err error) {
 	r, err := s.db.Query(deviceSelect + ` ORDER BY d.id`)
@@ -220,6 +225,7 @@ func (s *Store) upsertSeen(v Discovery) (Device, error) {
 		}
 	}
 	_, _ = tx.Exec(`INSERT INTO device_addresses(device_id,address,first_seen_at,last_seen_at)VALUES(?,?,?,?) ON CONFLICT(device_id,address) DO UPDATE SET last_seen_at=excluded.last_seen_at`, id, v.IP, t, t)
+	_, _ = tx.Exec(`INSERT INTO device_samples(device_id,checked_at,status,latency_ms,probe_method) VALUES(?,?,'online',?,?)`, id, t, v.Latency, v.ProbeMethod)
 	if e = tx.Commit(); e != nil {
 		return Device{}, e
 	}
@@ -250,7 +256,9 @@ func (s *Store) markMisses(seen map[string]bool, threshold int) error {
 		if status != d.Status {
 			_, _ = s.db.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at)VALUES(?,'status',?,?,?)`, d.ID, d.Status, status, t)
 		}
+		_, _ = s.db.Exec(`INSERT INTO device_samples(device_id,checked_at,status,latency_ms,probe_method) VALUES(?,?,?,0,'')`, d.ID, t, status)
 	}
+	_, _ = s.db.Exec(`DELETE FROM device_samples WHERE checked_at < datetime('now','-30 days')`)
 	_ = s.trimStatusEvents(5000)
 	return nil
 }
@@ -314,6 +322,8 @@ func allowedSetting(k string) bool {
 	case "initialized", "scan_interface", "scan_cidrs", "gateway_ip", "scan_interval", "scan_concurrency", "ping_timeout", "tcp_timeout", "offline_threshold", "enable_port_scan", "theme", "label_mode", "hide_offline_days",
 		"notification_enabled", "notification_telegram_enabled", "notification_telegram_token", "notification_telegram_chat_id", "notification_webhook_enabled", "notification_webhook_url",
 		"notification_new_device", "notification_offline", "notification_online", "notification_scan_error":
+		return true
+	case "notification_cooldown", "notification_important_only":
 		return true
 	}
 	return false
@@ -396,7 +406,8 @@ func mergeDeviceRecords(tx *sql.Tx, keepID, removeID int64) error {
 		notes=CASE WHEN notes='' THEN (SELECT notes FROM devices WHERE id=?) ELSE notes END,
 		is_hidden=MAX(is_hidden,(SELECT is_hidden FROM devices WHERE id=?)),
 		is_ignored=MAX(is_ignored,(SELECT is_ignored FROM devices WHERE id=?)),
-		always_show=MAX(always_show,(SELECT always_show FROM devices WHERE id=?)) WHERE id=?`, removeID, removeID, removeID, removeID, removeID, removeID, keepID); err != nil {
+		always_show=MAX(always_show,(SELECT always_show FROM devices WHERE id=?)),
+		is_important=MAX(is_important,(SELECT is_important FROM devices WHERE id=?)) WHERE id=?`, removeID, removeID, removeID, removeID, removeID, removeID, removeID, keepID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO device_addresses(device_id,address,first_seen_at,last_seen_at) SELECT ?,address,first_seen_at,last_seen_at FROM device_addresses WHERE device_id=?`, keepID, removeID); err != nil {

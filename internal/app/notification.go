@@ -47,30 +47,47 @@ func (n *Notifier) NotifyScan(startedAt string, status ScanStatus) {
 		return
 	}
 	lines := []string{}
+	type pendingNotification struct {
+		deviceID int64
+		event    string
+	}
+	pending := []pendingNotification{}
+	cooldown := 15 * time.Minute
+	if parsed, parseErr := time.ParseDuration(settings["notification_cooldown"]); parseErr == nil && parsed >= 0 {
+		cooldown = parsed
+	}
+	importantOnly := settingEnabled(settings, "notification_important_only", false)
 	if settingEnabled(settings, "notification_new_device", true) {
-		rows, err := n.store.db.Query(`SELECT COALESCE(NULLIF(user_name,''),NULLIF(auto_hostname,''),NULLIF(current_ip,''),'未命名设备'),current_ip FROM devices WHERE created_manually=0 AND first_seen_at>=? ORDER BY id`, startedAt)
+		rows, err := n.store.db.Query(`SELECT id,COALESCE(NULLIF(user_name,''),NULLIF(auto_hostname,''),NULLIF(current_ip,''),'未命名设备'),current_ip,is_important FROM devices WHERE created_manually=0 AND first_seen_at>=? ORDER BY id`, startedAt)
 		if err == nil {
 			for rows.Next() {
+				var id int64
 				var name, ip string
-				if rows.Scan(&name, &ip) == nil {
+				var important bool
+				if rows.Scan(&id, &name, &ip, &important) == nil && (!importantOnly || important) && n.allowNotification(id, "new", cooldown) {
 					lines = append(lines, fmt.Sprintf("发现新设备：%s%s", name, formatIP(ip)))
+					pending = append(pending, pendingNotification{id, "new"})
 				}
 			}
 			rows.Close()
 		}
 	}
-	rows, err := n.store.db.Query(`SELECT COALESCE(NULLIF(d.user_name,''),NULLIF(d.auto_hostname,''),NULLIF(d.current_ip,''),'已删除设备'),d.current_ip,e.new_status FROM status_events e LEFT JOIN devices d ON d.id=e.device_id WHERE e.created_at>=? ORDER BY e.id`, startedAt)
+	rows, err := n.store.db.Query(`SELECT e.device_id,COALESCE(NULLIF(d.user_name,''),NULLIF(d.auto_hostname,''),NULLIF(d.current_ip,''),'已删除设备'),d.current_ip,e.new_status,COALESCE(d.is_important,0) FROM status_events e LEFT JOIN devices d ON d.id=e.device_id WHERE e.created_at>=? ORDER BY e.id`, startedAt)
 	if err == nil {
 		for rows.Next() {
+			var deviceID int64
 			var name, ip, newStatus string
-			if rows.Scan(&name, &ip, &newStatus) != nil {
+			var important bool
+			if rows.Scan(&deviceID, &name, &ip, &newStatus, &important) != nil || (importantOnly && !important) {
 				continue
 			}
-			if newStatus == "online" && settingEnabled(settings, "notification_online", true) {
+			if newStatus == "online" && settingEnabled(settings, "notification_online", true) && n.allowNotification(deviceID, "online", cooldown) {
 				lines = append(lines, fmt.Sprintf("设备重新上线：%s%s", name, formatIP(ip)))
+				pending = append(pending, pendingNotification{deviceID, "online"})
 			}
-			if newStatus == "offline" && settingEnabled(settings, "notification_offline", true) {
+			if newStatus == "offline" && settingEnabled(settings, "notification_offline", true) && n.allowNotification(deviceID, "offline", cooldown) {
 				lines = append(lines, fmt.Sprintf("设备已离线：%s%s", name, formatIP(ip)))
+				pending = append(pending, pendingNotification{deviceID, "offline"})
 			}
 		}
 		rows.Close()
@@ -81,7 +98,23 @@ func (n *Notifier) NotifyScan(startedAt string, status ScanStatus) {
 	if len(lines) == 0 {
 		return
 	}
-	_ = n.send(context.Background(), "scan", "喵拓网络动态", strings.Join(lines, "\n"))
+	if err := n.send(context.Background(), "scan", "喵拓网络动态", strings.Join(lines, "\n")); err == nil {
+		for _, item := range pending {
+			_, _ = n.store.db.Exec(`INSERT INTO notification_state(device_id,event_type,last_sent_at) VALUES(?,?,?) ON CONFLICT(device_id,event_type) DO UPDATE SET last_sent_at=excluded.last_sent_at`, item.deviceID, item.event, now())
+		}
+	}
+}
+
+func (n *Notifier) allowNotification(deviceID int64, event string, cooldown time.Duration) bool {
+	if cooldown > 0 {
+		var last string
+		if err := n.store.db.QueryRow(`SELECT last_sent_at FROM notification_state WHERE device_id=? AND event_type=?`, deviceID, event).Scan(&last); err == nil {
+			if sentAt, parseErr := time.Parse(time.RFC3339, last); parseErr == nil && time.Since(sentAt) < cooldown {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func formatIP(ip string) string {

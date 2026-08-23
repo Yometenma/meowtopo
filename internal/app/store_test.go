@@ -63,6 +63,28 @@ func TestOfflineThreshold(t *testing.T) {
 	if d.Status != "offline" {
 		t.Fatalf("status=%s", d.Status)
 	}
+	var samples, offlineSamples int
+	if err := s.db.QueryRow(`SELECT COUNT(*),SUM(status='offline') FROM device_samples WHERE device_id=?`, d.ID).Scan(&samples, &offlineSamples); err != nil {
+		t.Fatal(err)
+	}
+	if samples != 4 || offlineSamples != 1 {
+		t.Fatalf("history samples=%d offline=%d", samples, offlineSamples)
+	}
+}
+
+func TestImportantDeviceSurvivesDiscovery(t *testing.T) {
+	s := testStore(t)
+	d, err := s.upsertSeen(Discovery{IP: "192.168.8.8", Type: "unknown"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(`UPDATE devices SET is_important=1 WHERE id=?`, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	d, err = s.upsertSeen(Discovery{IP: "192.168.8.8", Type: "tv", TypeConfidence: .7})
+	if err != nil || !d.Important {
+		t.Fatalf("important flag lost: %+v err=%v", d, err)
+	}
 }
 
 func TestEnsureCoreReusesScannedGatewayAndRepairsDuplicates(t *testing.T) {
@@ -153,7 +175,7 @@ func TestLegacyDeviceTableMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	want := map[string]bool{"probe_method": false, "open_ports": false, "identification_source": false, "identification_confidence": false}
+	want := map[string]bool{"probe_method": false, "open_ports": false, "identification_source": false, "identification_confidence": false, "is_important": false}
 	for rows.Next() {
 		var cid, notNull, primaryKey int
 		var name, kind string

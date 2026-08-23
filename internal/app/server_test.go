@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -193,5 +194,23 @@ func TestBatchDeviceActions(t *testing.T) {
 	}
 	if rec := call(fmt.Sprintf(`{"ids":%s,"action":"set_parent","parent_id":%d}`, ids, a.ID)); rec.Code != http.StatusBadRequest {
 		t.Fatalf("self-parent status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeviceHistorySummary(t *testing.T) {
+	s := testServer(t)
+	d, err := s.store.upsertSeen(Discovery{IP: "192.168.9.10", Type: "unknown", Latency: 10, ProbeMethod: "icmp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.store.db.Exec(`INSERT INTO device_samples(device_id,checked_at,status,latency_ms,probe_method) VALUES(?,?,'offline',0,'')`, d.ID, now()); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/devices/id/history?hours=24", nil)
+	req.SetPathValue("id", fmt.Sprint(d.ID))
+	rec := httptest.NewRecorder()
+	s.deviceHistory(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"uptime_percent":50`) || !strings.Contains(rec.Body.String(), `"average_latency_ms":10`) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

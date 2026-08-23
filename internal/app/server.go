@@ -68,7 +68,7 @@ func (s *Server) schedule(interval time.Duration) {
 		case <-t.C:
 			cfg := s.scanner.config()
 			if len(cfg.CIDRs) > 0 {
-				_ = s.scanner.Start(cfg.CIDRs[0])
+				_ = s.scanner.Start(strings.Join(cfg.CIDRs, ","))
 			}
 			t.Reset(interval)
 		case interval = <-s.intervalUpdates:
@@ -103,6 +103,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("POST /api/devices", s.require(PermEditDevices, s.createDevice))
 	m.Handle("POST /api/devices/batch", s.require(PermEditDevices, s.batchDevices))
 	m.Handle("GET /api/devices/{id}", s.require(PermView, s.getDevice))
+	m.Handle("GET /api/devices/{id}/history", s.require(PermView, s.deviceHistory))
 	m.Handle("PATCH /api/devices/{id}", s.require(PermEditDevices, s.patchDevice))
 	m.Handle("DELETE /api/devices/{id}", s.require(PermEditDevices, s.deleteDevice))
 	m.Handle("POST /api/devices/{id}/ping", s.require(PermRunScans, s.pingDevice))
@@ -275,6 +276,7 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 		IsNew      *bool   `json:"is_new"`
 		IsIgnored  *bool   `json:"is_ignored"`
 		AlwaysShow *bool   `json:"always_show"`
+		Important  *bool   `json:"is_important"`
 	}
 	if e = decode(r, &v); e != nil {
 		fail(w, 400, "invalid_request", e.Error())
@@ -309,6 +311,10 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 	if v.AlwaysShow != nil {
 		sets = append(sets, "always_show=?")
 		args = append(args, *v.AlwaysShow)
+	}
+	if v.Important != nil {
+		sets = append(sets, "is_important=?")
+		args = append(args, *v.Important)
 	}
 	args = append(args, id)
 	if _, e = s.store.db.Exec(`UPDATE devices SET `+strings.Join(sets, ",")+` WHERE id=?`, args...); e != nil {
@@ -392,7 +398,60 @@ func (s *Server) pingDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	result := s.scanner.probe(ctx, d.IP)
+	status := "offline"
+	if result.Alive {
+		status = "online"
+	}
+	_, _ = s.store.db.Exec(`INSERT INTO device_samples(device_id,checked_at,status,latency_ms,probe_method) VALUES(?,?,?,?,?)`, id, now(), status, result.Latency, result.Method)
 	jsonOut(w, 200, map[string]any{"reachable": result.Alive, "latency_ms": result.Latency, "method": result.Method, "open_ports": result.OpenPorts})
+}
+
+func (s *Server) deviceHistory(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		fail(w, 400, "invalid_id", "设备编号无效")
+		return
+	}
+	hours := 24
+	if raw := r.URL.Query().Get("hours"); raw != "" {
+		if n, e := strconv.Atoi(raw); e == nil && n >= 1 && n <= 720 {
+			hours = n
+		}
+	}
+	rows, err := s.store.db.Query(`SELECT checked_at,status,latency_ms,probe_method FROM device_samples WHERE device_id=? AND checked_at>=? ORDER BY checked_at`, id, time.Now().UTC().Add(-time.Duration(hours)*time.Hour).Format(time.RFC3339))
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	defer rows.Close()
+	points := []map[string]any{}
+	online, total, latencyCount := 0, 0, 0
+	latencyTotal := 0.0
+	for rows.Next() {
+		var checkedAt, status, method string
+		var latency float64
+		if err = rows.Scan(&checkedAt, &status, &latency, &method); err != nil {
+			fail(w, 500, "database_error", err.Error())
+			return
+		}
+		total++
+		if status == "online" {
+			online++
+		}
+		if latency > 0 {
+			latencyTotal += latency
+			latencyCount++
+		}
+		points = append(points, map[string]any{"checked_at": checkedAt, "status": status, "latency_ms": latency, "probe_method": method})
+	}
+	uptime, average := 0.0, 0.0
+	if total > 0 {
+		uptime = float64(online) * 100 / float64(total)
+	}
+	if latencyCount > 0 {
+		average = latencyTotal / float64(latencyCount)
+	}
+	jsonOut(w, 200, map[string]any{"hours": hours, "samples": total, "uptime_percent": uptime, "average_latency_ms": average, "points": points})
 }
 func (s *Server) position(w http.ResponseWriter, r *http.Request) {
 	id, e := idParam(r)
@@ -474,7 +533,7 @@ func (s *Server) startScan(w http.ResponseWriter, r *http.Request) {
 	_ = decode(r, &v)
 	if v.CIDR == "" {
 		set, _ := s.store.settings()
-		v.CIDR = strings.Split(set["scan_cidrs"], ",")[0]
+		v.CIDR = set["scan_cidrs"]
 	}
 	if v.CIDR == "" {
 		fail(w, 400, "not_configured", "请先配置扫描网段")
