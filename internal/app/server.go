@@ -90,6 +90,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/network/detection", func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, detectNetwork(s.cfg.DataDir)) })
 	m.HandleFunc("GET /api/devices", s.listDevices)
 	m.HandleFunc("POST /api/devices", s.createDevice)
+	m.HandleFunc("POST /api/devices/batch", s.batchDevices)
 	m.HandleFunc("GET /api/devices/{id}", s.getDevice)
 	m.HandleFunc("PATCH /api/devices/{id}", s.patchDevice)
 	m.HandleFunc("DELETE /api/devices/{id}", s.deleteDevice)
@@ -160,6 +161,91 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	s.events.Emit("device_created", d)
 	jsonOut(w, 201, d)
+}
+func (s *Server) batchDevices(w http.ResponseWriter, r *http.Request) {
+	var v struct {
+		IDs            []int64 `json:"ids"`
+		Action         string  `json:"action"`
+		ParentID       int64   `json:"parent_id"`
+		ConnectionType string  `json:"connection_type"`
+	}
+	if err := decode(r, &v); err != nil || len(v.IDs) == 0 || len(v.IDs) > 500 {
+		fail(w, 400, "invalid_request", "请选择 1 到 500 台设备")
+		return
+	}
+	seen := make(map[int64]bool, len(v.IDs))
+	ids := make([]int64, 0, len(v.IDs))
+	for _, id := range v.IDs {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		fail(w, 400, "invalid_request", "设备编号无效")
+		return
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	tx, err := s.store.db.Begin()
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	defer tx.Rollback()
+	var result sql.Result
+	switch v.Action {
+	case "hide":
+		result, err = tx.Exec(`UPDATE devices SET is_hidden=1,updated_at=? WHERE id IN (`+placeholders+`)`, append([]any{now()}, args...)...)
+	case "unhide":
+		result, err = tx.Exec(`UPDATE devices SET is_hidden=0,updated_at=? WHERE id IN (`+placeholders+`)`, append([]any{now()}, args...)...)
+	case "clear_new":
+		result, err = tx.Exec(`UPDATE devices SET is_new=0,updated_at=? WHERE id IN (`+placeholders+`)`, append([]any{now()}, args...)...)
+	case "set_parent":
+		if v.ParentID <= 0 || seen[v.ParentID] {
+			fail(w, 400, "invalid_parent", "父设备不能是所选设备本身")
+			return
+		}
+		if err = tx.QueryRow(`SELECT id FROM devices WHERE id=?`, v.ParentID).Scan(&v.ParentID); err != nil {
+			fail(w, 400, "invalid_parent", "父设备不存在")
+			return
+		}
+		switch v.ConnectionType {
+		case "ethernet", "wifi", "unknown", "virtual", "logical":
+		default:
+			v.ConnectionType = "unknown"
+		}
+		if _, err = tx.Exec(`DELETE FROM connections WHERE target_device_id IN (`+placeholders+`)`, args...); err == nil {
+			for _, id := range ids {
+				_, err = tx.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,source_type,confidence,user_confirmed,created_at,updated_at)VALUES(?,?,?,'manual',1,1,?,?)`, v.ParentID, id, v.ConnectionType, now(), now())
+				if err != nil {
+					break
+				}
+			}
+		}
+		result = nil
+	default:
+		fail(w, 400, "invalid_action", "不支持的批量操作")
+		return
+	}
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	updated := int64(len(ids))
+	if result != nil {
+		updated, _ = result.RowsAffected()
+	}
+	s.events.Emit("devices_updated", map[string]any{"ids": ids, "action": v.Action})
+	jsonOut(w, 200, map[string]any{"updated": updated})
 }
 func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 	id, e := idParam(r)

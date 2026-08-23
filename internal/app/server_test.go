@@ -108,3 +108,42 @@ func TestConnectionCanBeCleared(t *testing.T) {
 		t.Fatalf("connection was not removed: %+v", connections)
 	}
 }
+
+func TestBatchDeviceActions(t *testing.T) {
+	s := testServer(t)
+	parent, _ := s.store.createManual("核心交换机", "switch", "")
+	a, _ := s.store.createManual("设备 A", "unknown", "")
+	b, _ := s.store.createManual("设备 B", "unknown", "")
+	if _, err := s.store.db.Exec(`UPDATE devices SET is_new=1 WHERE id IN (?,?)`, a.ID, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	call := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/devices/batch", bytes.NewBufferString(body))
+		rec := httptest.NewRecorder()
+		s.batchDevices(rec, req)
+		return rec
+	}
+	ids := fmt.Sprintf(`[%d,%d]`, a.ID, b.ID)
+	if rec := call(fmt.Sprintf(`{"ids":%s,"action":"hide"}`, ids)); rec.Code != http.StatusOK {
+		t.Fatalf("hide status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, id := range []int64{a.ID, b.ID} {
+		d, _ := s.store.device(id)
+		if !d.IsHidden {
+			t.Fatalf("device %d was not hidden", id)
+		}
+	}
+	if rec := call(fmt.Sprintf(`{"ids":%s,"action":"clear_new"}`, ids)); rec.Code != http.StatusOK {
+		t.Fatalf("clear status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(fmt.Sprintf(`{"ids":%s,"action":"set_parent","parent_id":%d,"connection_type":"ethernet"}`, ids, parent.ID)); rec.Code != http.StatusOK {
+		t.Fatalf("parent status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	connections, _ := s.store.connections()
+	if len(connections) != 2 {
+		t.Fatalf("connections=%+v", connections)
+	}
+	if rec := call(fmt.Sprintf(`{"ids":%s,"action":"set_parent","parent_id":%d}`, ids, a.ID)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("self-parent status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
