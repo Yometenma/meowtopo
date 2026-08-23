@@ -335,16 +335,42 @@ func (s *Store) ensureCore(gateway string) error {
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(`INSERT INTO devices(stable_key,current_ip,user_name,user_device_type,first_seen_at,status,is_new,created_at,updated_at)VALUES(?,?,'主网关','gateway',?,'unknown',0,?,?) ON CONFLICT(stable_key) DO UPDATE SET current_ip=excluded.current_ip`, "ip:"+gateway, gateway, t, t, t)
-	if e != nil {
-		return e
-	}
 	var internet, gatewayID int64
 	if e = tx.QueryRow(`SELECT id FROM devices WHERE stable_key='virtual:internet'`).Scan(&internet); e != nil {
 		return e
 	}
-	if e = tx.QueryRow(`SELECT id FROM devices WHERE stable_key=?`, "ip:"+gateway).Scan(&gatewayID); e != nil {
-		return e
+	rows, err := tx.Query(`SELECT id FROM devices WHERE current_ip=? OR stable_key=? ORDER BY (mac_address<>'') DESC,(status='online') DESC,id`, gateway, "ip:"+gateway)
+	if err != nil {
+		return err
+	}
+	var gatewayIDs []int64
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		gatewayIDs = append(gatewayIDs, id)
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	if len(gatewayIDs) == 0 {
+		result, err := tx.Exec(`INSERT INTO devices(stable_key,current_ip,user_name,user_device_type,first_seen_at,status,is_new,created_at,updated_at)VALUES(?,?,'主网关','gateway',?,'unknown',0,?,?)`, "ip:"+gateway, gateway, t, t, t)
+		if err != nil {
+			return err
+		}
+		gatewayID, _ = result.LastInsertId()
+	} else {
+		gatewayID = gatewayIDs[0]
+		for _, duplicateID := range gatewayIDs[1:] {
+			if err = mergeDeviceRecords(tx, gatewayID, duplicateID); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.Exec(`UPDATE devices SET current_ip=?,user_name=CASE WHEN user_name='' THEN '主网关' ELSE user_name END,user_device_type=CASE WHEN user_device_type='' THEN 'gateway' ELSE user_device_type END,is_new=0,updated_at=? WHERE id=?`, gateway, t, gatewayID); err != nil {
+			return err
+		}
 	}
 	_, e = tx.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,source_type,confidence,user_confirmed,created_at,updated_at)VALUES(?,?,'virtual','manual',1,1,?,?) ON CONFLICT(source_device_id,target_device_id) DO NOTHING`, internet, gatewayID, t, t)
 	if e != nil {
@@ -355,4 +381,69 @@ func (s *Store) ensureCore(gateway string) error {
 		return e
 	}
 	return tx.Commit()
+}
+
+func mergeDeviceRecords(tx *sql.Tx, keepID, removeID int64) error {
+	if keepID == removeID {
+		return nil
+	}
+	if _, err := tx.Exec(`UPDATE devices SET
+		user_name=CASE WHEN user_name='' THEN (SELECT user_name FROM devices WHERE id=?) ELSE user_name END,
+		user_device_type=CASE WHEN user_device_type='' THEN (SELECT user_device_type FROM devices WHERE id=?) ELSE user_device_type END,
+		notes=CASE WHEN notes='' THEN (SELECT notes FROM devices WHERE id=?) ELSE notes END,
+		is_hidden=MAX(is_hidden,(SELECT is_hidden FROM devices WHERE id=?)),
+		is_ignored=MAX(is_ignored,(SELECT is_ignored FROM devices WHERE id=?)),
+		always_show=MAX(always_show,(SELECT always_show FROM devices WHERE id=?)) WHERE id=?`, removeID, removeID, removeID, removeID, removeID, removeID, keepID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO device_addresses(device_id,address,first_seen_at,last_seen_at) SELECT ?,address,first_seen_at,last_seen_at FROM device_addresses WHERE device_id=?`, keepID, removeID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO node_positions(device_id,x,y,locked,updated_at) SELECT ?,x,y,locked,updated_at FROM node_positions WHERE device_id=?`, keepID, removeID); err != nil {
+		return err
+	}
+	rows, err := tx.Query(`SELECT source_device_id,target_device_id,connection_type,port_label,source_type,confidence,user_confirmed,created_at,updated_at FROM connections WHERE source_device_id=? OR target_device_id=?`, removeID, removeID)
+	if err != nil {
+		return err
+	}
+	type edge struct {
+		source, target                           int64
+		kind, port, sourceType, created, updated string
+		confidence                               float64
+		confirmed                                int
+	}
+	var edges []edge
+	for rows.Next() {
+		var edge edge
+		if err = rows.Scan(&edge.source, &edge.target, &edge.kind, &edge.port, &edge.sourceType, &edge.confidence, &edge.confirmed, &edge.created, &edge.updated); err != nil {
+			rows.Close()
+			return err
+		}
+		edges = append(edges, edge)
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM connections WHERE source_device_id=? OR target_device_id=?`, removeID, removeID); err != nil {
+		return err
+	}
+	for _, edge := range edges {
+		if edge.source == removeID {
+			edge.source = keepID
+		}
+		if edge.target == removeID {
+			edge.target = keepID
+		}
+		if edge.source == edge.target {
+			continue
+		}
+		if _, err = tx.Exec(`INSERT OR IGNORE INTO connections(source_device_id,target_device_id,connection_type,port_label,source_type,confidence,user_confirmed,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, edge.source, edge.target, edge.kind, edge.port, edge.sourceType, edge.confidence, edge.confirmed, edge.created, edge.updated); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec(`UPDATE status_events SET device_id=? WHERE device_id=?`, keepID, removeID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(`DELETE FROM devices WHERE id=?`, removeID)
+	return err
 }

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -86,6 +89,8 @@ func (s *Scanner) run(n *net.IPNet) {
 			defer wg.Done()
 			for ip := range jobs {
 				result := probeTarget(ctx, ip, cfg)
+				mac := arpMAC(ip)
+				result = applyARPResult(result, mac)
 				if result.Alive {
 					seenMu.Lock()
 					seen[ip] = true
@@ -94,7 +99,6 @@ func (s *Scanner) run(n *net.IPNet) {
 					if names, _ := net.LookupAddr(ip); len(names) > 0 {
 						host = names[0]
 					}
-					mac := arpMAC(ip)
 					typ, source, confidence := identifyType(host, result.OpenPorts)
 					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Type: typ, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: source, TypeConfidence: confidence})
 					s.events.Emit("device_seen", d)
@@ -122,6 +126,21 @@ sendLoop:
 	}
 	close(jobs)
 	wg.Wait()
+	for ip, mac := range arpNeighbors() {
+		parsed := net.ParseIP(ip)
+		if parsed == nil || !n.Contains(parsed) || seen[ip] {
+			continue
+		}
+		seen[ip] = true
+		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Type: "unknown", ProbeMethod: "arp"})
+		if err != nil {
+			continue
+		}
+		s.mu.Lock()
+		s.status.Found++
+		s.mu.Unlock()
+		s.events.Emit("device_seen", d)
+	}
 	_ = s.store.markMisses(seen, cfg.OfflineThreshold)
 	if set, _ := s.store.settings(); set["gateway_ip"] != "" {
 		_ = s.store.ensureCore(set["gateway_ip"])
@@ -143,6 +162,13 @@ sendLoop:
 	if s.notifier != nil {
 		go s.notifier.NotifyScan(st.StartedAt, st)
 	}
+}
+func applyARPResult(result ProbeResult, mac string) ProbeResult {
+	if !result.Alive && mac != "" {
+		result.Alive = true
+		result.Method = "arp"
+	}
+	return result
 }
 func (s *Scanner) probe(ctx context.Context, ip string) ProbeResult {
 	cfg := s.config()
@@ -257,6 +283,9 @@ func lastIP(n *net.IPNet) net.IP {
 	return ip
 }
 func arpMAC(ip string) string {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
 	f, err := os.Open("/proc/net/arp")
 	if err != nil {
 		return ""
@@ -265,14 +294,69 @@ func arpMAC(ip string) string {
 	s := bufio.NewScanner(f)
 	s.Scan()
 	for s.Scan() {
-		p := strings.Fields(s.Text())
-		if len(p) >= 4 && p[0] == ip {
-			if mac, e := normalizeMAC(p[3]); e == nil {
-				return mac
-			}
+		if mac := parseARPLine(s.Text(), ip); mac != "" {
+			return mac
 		}
 	}
 	return ""
+}
+func arpNeighbors() map[string]string {
+	out := map[string]string{}
+	if runtime.GOOS == "linux" {
+		file, err := os.Open("/proc/net/arp")
+		if err != nil {
+			return out
+		}
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		scanner.Scan()
+		for scanner.Scan() {
+			fields := strings.Fields(scanner.Text())
+			if len(fields) > 0 {
+				if mac := parseARPLine(scanner.Text(), fields[0]); mac != "" {
+					out[fields[0]] = mac
+				}
+			}
+		}
+		return out
+	}
+	if runtime.GOOS == "windows" {
+		data, err := exec.Command("arp", "-a").Output()
+		if err != nil {
+			return out
+		}
+		return parseWindowsARP(string(data))
+	}
+	return out
+}
+func parseWindowsARP(data string) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(data, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || net.ParseIP(fields[0]) == nil {
+			continue
+		}
+		mac, err := normalizeMAC(fields[1])
+		if err == nil && mac != "00:00:00:00:00:00" && mac != "ff:ff:ff:ff:ff:ff" {
+			out[fields[0]] = mac
+		}
+	}
+	return out
+}
+func parseARPLine(line, ip string) string {
+	fields := strings.Fields(line)
+	if len(fields) < 4 || fields[0] != ip {
+		return ""
+	}
+	flags, err := strconv.ParseUint(fields[2], 0, 32)
+	if err != nil || flags&0x2 == 0 {
+		return ""
+	}
+	mac, err := normalizeMAC(fields[3])
+	if err != nil || mac == "00:00:00:00:00:00" || mac == "ff:ff:ff:ff:ff:ff" {
+		return ""
+	}
+	return mac
 }
 func identifyType(host string, ports []int) (string, string, float64) {
 	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))

@@ -64,6 +64,44 @@ func TestOfflineThreshold(t *testing.T) {
 		t.Fatalf("status=%s", d.Status)
 	}
 }
+
+func TestEnsureCoreReusesScannedGatewayAndRepairsDuplicates(t *testing.T) {
+	s := testStore(t)
+	if err := s.ensureCore("192.168.1.1"); err != nil {
+		t.Fatal(err)
+	}
+	gateway, err := s.upsertSeen(Discovery{IP: "192.168.1.1", MAC: "aa:bb:cc:dd:ee:01", Hostname: "router", Type: "router", ProbeMethod: "arp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(`INSERT INTO devices(stable_key,current_ip,user_name,user_device_type,first_seen_at,status,is_new,created_at,updated_at) VALUES('ip:192.168.1.1','192.168.1.1','重复网关','gateway',?,'unknown',0,?,?)`, now(), now(), now()); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ensureCore("192.168.1.1"); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err = s.db.QueryRow(`SELECT COUNT(*) FROM devices WHERE current_ip='192.168.1.1'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("gateway count=%d", count)
+	}
+	kept, err := s.device(gateway.ID)
+	if err != nil {
+		t.Fatalf("scanned gateway was not preserved: %v", err)
+	}
+	if kept.MAC != "aa:bb:cc:dd:ee:01" || kept.UserType != "gateway" {
+		t.Fatalf("unexpected gateway: %+v", kept)
+	}
+	var links int
+	if err = s.db.QueryRow(`SELECT COUNT(*) FROM connections c JOIN devices source ON source.id=c.source_device_id WHERE source.stable_key='virtual:internet' AND c.target_device_id=?`, kept.ID).Scan(&links); err != nil {
+		t.Fatal(err)
+	}
+	if links != 1 {
+		t.Fatalf("internet to gateway links=%d", links)
+	}
+}
 func TestPositionConnectionAndMigration(t *testing.T) {
 	s := testStore(t)
 	a, err := s.createManual("交换机", "switch", "")

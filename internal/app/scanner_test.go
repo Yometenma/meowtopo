@@ -11,6 +11,38 @@ func TestProbePortsCanBeDisabled(t *testing.T) {
 	}
 }
 
+func TestARPResponseMarksLocalDeviceAlive(t *testing.T) {
+	result := applyARPResult(ProbeResult{}, "aa:bb:cc:dd:ee:ff")
+	if !result.Alive || result.Method != "arp" {
+		t.Fatalf("ARP neighbor was not accepted: %+v", result)
+	}
+	result = applyARPResult(ProbeResult{Alive: true, Method: "icmp", Latency: 2}, "aa:bb:cc:dd:ee:ff")
+	if result.Method != "icmp" || result.Latency != 2 {
+		t.Fatalf("ARP overwrote stronger probe: %+v", result)
+	}
+}
+
+func TestParseARPLineRequiresCompleteNeighbor(t *testing.T) {
+	if got := parseARPLine("192.168.1.20 0x1 0x2 aa:bb:cc:dd:ee:ff * eth0", "192.168.1.20"); got != "aa:bb:cc:dd:ee:ff" {
+		t.Fatalf("valid ARP entry=%q", got)
+	}
+	for _, line := range []string{
+		"192.168.1.20 0x1 0x0 00:00:00:00:00:00 * eth0",
+		"192.168.1.20 0x1 0x2 ff:ff:ff:ff:ff:ff * eth0",
+	} {
+		if got := parseARPLine(line, "192.168.1.20"); got != "" {
+			t.Fatalf("incomplete ARP entry accepted: %q", got)
+		}
+	}
+}
+
+func TestParseWindowsARP(t *testing.T) {
+	neighbors := parseWindowsARP("接口: 192.168.1.10 --- 0x8\r\n  192.168.1.1          aa-bb-cc-dd-ee-01     动态\r\n  192.168.1.20         00-00-00-00-00-00     无效\r\n")
+	if neighbors["192.168.1.1"] != "aa:bb:cc:dd:ee:01" || len(neighbors) != 1 {
+		t.Fatalf("neighbors=%v", neighbors)
+	}
+}
+
 func TestIdentifyType(t *testing.T) {
 	tests := []struct {
 		name, host, wantType, wantSource string
