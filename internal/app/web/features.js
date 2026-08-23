@@ -203,6 +203,7 @@ refresh = async function (...args) {
 const originalManagerRender = renderManager;
 renderManager = function () {
   originalManagerRender();
+  document.querySelector('#managerDialog .batch-bar')?.classList.toggle('has-selection', selectedDevices.size > 0);
   document.querySelectorAll('#managerList .manager-device').forEach(row => {
     const actions = row.querySelector('.manager-device-actions');
     const id = +(actions?.querySelector('[data-id]')?.dataset.id || 0);
@@ -211,6 +212,11 @@ renderManager = function () {
     if (device.is_important) row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge attention">长期在线</span>');
     actions.insertAdjacentHTML('afterbegin', `<button data-action="attention" data-id="${id}">${device.is_important ? '取消长期在线' : '设为长期在线'}</button>`);
     actions.querySelector('[data-action="attention"]').onclick = event => managerAction(event.currentTarget);
+    row.onclick = event => {
+      if (event.target.closest('button,input,label')) return;
+      document.querySelector('#managerDialog').close();
+      openDetail(id);
+    };
   });
 };
 
@@ -245,6 +251,23 @@ bind = function () {
   ensureMaintenanceUI();
   originalBind();
   ensureDashboardChrome();
+  document.querySelectorAll('[data-activity-pane]').forEach(button => button.onclick = () => {
+    document.querySelectorAll('[data-activity-pane]').forEach(item => item.classList.toggle('active', item === button));
+    document.querySelectorAll('[data-activity-content]').forEach(pane => pane.classList.toggle('hidden', pane.dataset.activityContent !== button.dataset.activityPane));
+  });
+  const createForm = document.querySelector('#accountCreateForm');
+  const permissionGrid = createForm?.querySelector('.permission-grid');
+  if (permissionGrid && !document.querySelector('#accountRolePreset')) {
+    permissionGrid.insertAdjacentHTML('beforebegin', `<label class="role-preset">使用权限<select id="accountRolePreset"><option value="view">只查看（适合访客）</option><option value="family">家庭成员（可整理设备）</option><option value="maintain">协助管理（可扫描和设置）</option><option value="admin">管理员（全部权限）</option></select><small>先选择常用权限，需要时再在下方微调。</small></label>`);
+    document.querySelector('#accountRolePreset').onchange = event => {
+      const role = event.target.value;
+      document.querySelector('#newAdmin').checked = role === 'admin';
+      document.querySelector('#newCanEdit').checked = ['family', 'maintain', 'admin'].includes(role);
+      document.querySelector('#newCanScan').checked = ['maintain', 'admin'].includes(role);
+      document.querySelector('#newCanSettings').checked = ['maintain', 'admin'].includes(role);
+      document.querySelectorAll('.permission-grid input').forEach(input => input.disabled = role === 'admin');
+    };
+  }
   [document.querySelector('#wizardLater'), document.querySelector('#settingsForm button[value="cancel"]'), document.querySelector('#manualForm button[value="cancel"]')].filter(Boolean).forEach(button => {
     button.type = 'button';
     button.onclick = () => {
