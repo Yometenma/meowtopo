@@ -1,0 +1,7 @@
+.git
+.github
+data
+*.db
+*.log
+moetopo
+coverage.out

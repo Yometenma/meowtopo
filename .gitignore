@@ -1,0 +1,14 @@
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+/moetopo
+/moetopo.exe
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+coverage.out
+/.cache/
+/.smoke-data/

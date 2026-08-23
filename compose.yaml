@@ -1,0 +1,17 @@
+services:
+  moetopo:
+    build: .
+    image: moetopo/moetopo:local
+    container_name: moetopo
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./data:/data
+    environment:
+      MOETOPO_DATA_DIR: /data
+      MOETOPO_HTTP_ADDR: 0.0.0.0:8088
+      # TZ: Asia/Shanghai
