@@ -64,8 +64,38 @@ func testServer(t *testing.T) *Server {
 	events := newHub()
 	base := Config{ScanInterval: 5 * time.Minute, PingTimeout: 800 * time.Millisecond, TCPTimeout: 350 * time.Millisecond, Concurrency: 32, OfflineThreshold: 3, EnablePortScan: true}
 	s := &Server{store: store, events: events, intervalUpdates: make(chan time.Duration, 1)}
-	s.scanner = &Scanner{store: store, cfg: base, events: events}
+	s.notifier = newNotifier(store)
+	s.scanner = &Scanner{store: store, cfg: base, events: events, notifier: s.notifier}
 	return s
+}
+
+func TestRestoreRefreshesDatabaseUsers(t *testing.T) {
+	s := testServer(t)
+	t.Cleanup(func() { _ = s.store.db.Close() })
+	oldStore := s.store
+	var backup bytes.Buffer
+	if err := s.writeBackup(&backup); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/restore", bytes.NewReader(backup.Bytes()))
+	s.restore(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if s.store == oldStore {
+		t.Fatal("restore did not replace the store")
+	}
+	if s.notifier == nil || s.notifier.store != s.store {
+		t.Fatal("notifier still uses the closed pre-restore database")
+	}
+	if s.scanner.store != s.store || s.scanner.notifier != s.notifier {
+		t.Fatal("scanner still uses pre-restore dependencies")
+	}
+	if _, err := s.notifier.store.settings(); err != nil {
+		t.Fatalf("notification settings unavailable after restore: %v", err)
+	}
 }
 
 func TestPatchSettingsUpdatesRunningScanner(t *testing.T) {

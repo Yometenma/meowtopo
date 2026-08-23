@@ -788,6 +788,8 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	test.Close()
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
 	s.store.db.Close()
 	previous := s.store.path + ".pre-restore-" + time.Now().UTC().Format("20060102T150405Z")
 	if e = os.Rename(s.store.path, previous); e != nil {
@@ -804,7 +806,9 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "restore_failed", e.Error())
 		return
 	}
+	s.notifier = newNotifier(s.store)
 	s.scanner.store = s.store
+	s.scanner.notifier = s.notifier
 	jsonOut(w, 200, map[string]string{"status": "restored", "message": "恢复完成"})
 }
 func sqlOpenCheck(p string) (io.Closer, error) {
