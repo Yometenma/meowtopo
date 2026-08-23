@@ -168,6 +168,12 @@ function ensureDashboardChrome() {
   document.querySelector('#overviewNav').onclick = () => cy?.fit(undefined, 60);
 
   header.insertAdjacentHTML('afterbegin', '<div class="page-heading"><small>家庭网络中心</small><strong>网络拓扑</strong></div>');
+  main.querySelector('#canvasPage').insertAdjacentHTML('beforeend', `
+    <section class="canvas-context" aria-label="拓扑状态">
+      <span class="context-kicker"><i></i> LIVE TOPOLOGY</span>
+      <strong>家庭网络拓扑</strong>
+      <small id="networkHealthText">正在读取网络状态…</small>
+    </section>`);
   const toolbar = document.createElement('div');
   toolbar.className = 'canvas-toolbar';
   main.querySelector('#canvasPage').appendChild(toolbar);
@@ -175,7 +181,24 @@ function ensureDashboardChrome() {
   layout.innerHTML = `${shellIcon('layout')}<span>整理布局</span>`;
   fit.innerHTML = `${shellIcon('fit')}<span>适应画布</span>`;
   toolbar.append(layout, fit);
+  updateDashboardHealth();
 }
+
+function updateDashboardHealth() {
+  const target = document.querySelector('#networkHealthText');
+  if (!target) return;
+  const online = devices.filter(device => device.status === 'online').length;
+  const attention = devices.filter(device => ['offline', 'suspected_offline'].includes(device.status)).length;
+  target.textContent = devices.length ? `${online} 台在线${attention ? ` · ${attention} 台需要留意` : ' · 当前状态良好'}` : '等待第一次网络扫描';
+  target.classList.toggle('has-warning', attention > 0);
+}
+
+const originalDashboardRefresh = refresh;
+refresh = async function (...args) {
+  const result = await originalDashboardRefresh(...args);
+  updateDashboardHealth();
+  return result;
+};
 
 async function loadMaintenanceStatus() {
   const result = document.querySelector('#maintenanceStatus');
