@@ -408,7 +408,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusTooManyRequests, "login_blocked", "登录失败次数过多，请 10 分钟后再试")
 		return
 	}
-	var v struct{ Username, Password string }
+	// DisplayName is accepted for compatibility with clients cached before the
+	// login form stopped sending the setup-only field.
+	var v struct{ Username, DisplayName, Password string }
 	if decode(r, &v) != nil {
 		fail(w, 400, "invalid_request", "提交内容无效")
 		return

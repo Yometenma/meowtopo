@@ -86,7 +86,7 @@ func TestAuthenticationAndPermissions(t *testing.T) {
 		t.Fatalf("member create status=%d body=%s", memberCreate.Code, memberCreate.Body.String())
 	}
 
-	login := authRequest(mux, http.MethodPost, "/api/auth/login", `{"username":"guest","password":"guest-password-123"}`, nil, "")
+	login := authRequest(mux, http.MethodPost, "/api/auth/login", `{"username":"guest","displayName":"","password":"guest-password-123"}`, nil, "")
 	if login.Code != http.StatusOK {
 		t.Fatalf("member login status=%d body=%s", login.Code, login.Body.String())
 	}
