@@ -18,7 +18,7 @@ openDetail = function (id) {
   }
   const actions = document.querySelector('#detail .drawer-actions');
   if (actions) {
-    actions.insertAdjacentHTML('beforebegin', `<label class="check"><input id="editImportant" type="checkbox" ${device?.is_important ? 'checked' : ''}>重要设备（可用于只推送重要设备）</label>`);
+    actions.insertAdjacentHTML('beforebegin', `<section class="attention-setting"><label class="check"><input id="editImportant" type="checkbox" ${device?.is_important ? 'checked' : ''}>设为重点关注设备</label><small>只有重点设备离线时，才会计入“需要留意”并发送离线或恢复通知。</small></section>`);
   }
 };
 
@@ -84,7 +84,7 @@ const originalEnsureNotificationUI = ensureNotificationUI;
 ensureNotificationUI = function () {
   originalEnsureNotificationUI();
   if (!document.querySelector('#notifyCooldown')) {
-    document.querySelector('#notificationResult').insertAdjacentHTML('beforebegin', `<div class="formgrid notification-controls"><label>同类消息冷却时间<select id="notifyCooldown"><option value="0s">不限制</option><option value="5m">5 分钟</option><option value="15m">15 分钟</option><option value="1h">1 小时</option><option value="6h">6 小时</option></select></label><label class="check"><input id="notifyImportantOnly" type="checkbox">只推送标记为重要的设备</label></div>`);
+    document.querySelector('#notificationResult').insertAdjacentHTML('beforebegin', `<div class="formgrid notification-controls"><label>同类消息冷却时间<select id="notifyCooldown"><option value="0s">不限制</option><option value="5m">5 分钟</option><option value="15m">15 分钟</option><option value="1h">1 小时</option><option value="6h">6 小时</option></select></label><label class="check notification-rule"><input id="notifyImportantOnly" type="checkbox" checked disabled>离线与恢复只提醒重点关注设备</label></div>`);
   }
 };
 
@@ -92,7 +92,7 @@ const originalOpenSettings = openSettings;
 openSettings = async function () {
   await originalOpenSettings();
   document.querySelector('#notifyCooldown').value = settings.notification_cooldown || '15m';
-  document.querySelector('#notifyImportantOnly').checked = settings.notification_important_only === 'true';
+  document.querySelector('#notifyImportantOnly').checked = true;
   document.querySelector('#autoBackupEnabled').checked = settings.automatic_backup_enabled === 'true';
   document.querySelector('#autoBackupInterval').value = settings.automatic_backup_interval || '24h';
   document.querySelector('#autoBackupKeep').value = settings.automatic_backup_keep || 7;
@@ -188,8 +188,8 @@ function updateDashboardHealth() {
   const target = document.querySelector('#networkHealthText');
   if (!target) return;
   const online = devices.filter(device => device.status === 'online').length;
-  const attention = devices.filter(device => ['offline', 'suspected_offline'].includes(device.status)).length;
-  target.textContent = devices.length ? `${online} 台在线${attention ? ` · ${attention} 台需要留意` : ' · 当前状态良好'}` : '等待第一次网络扫描';
+  const attention = devices.filter(device => device.is_important && ['offline', 'suspected_offline'].includes(device.status)).length;
+  target.textContent = devices.length ? `${online} 台在线${attention ? ` · ${attention} 台重点设备需要留意` : ' · 重点设备状态良好'}` : '等待第一次网络扫描';
   target.classList.toggle('has-warning', attention > 0);
 }
 
@@ -198,6 +198,35 @@ refresh = async function (...args) {
   const result = await originalDashboardRefresh(...args);
   updateDashboardHealth();
   return result;
+};
+
+const originalManagerRender = renderManager;
+renderManager = function () {
+  originalManagerRender();
+  document.querySelectorAll('#managerList .manager-device').forEach(row => {
+    const actions = row.querySelector('.manager-device-actions');
+    const id = +(actions?.querySelector('[data-id]')?.dataset.id || 0);
+    const device = devices.find(item => item.id === id);
+    if (!actions || !device) return;
+    if (device.is_important) row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge attention">重点关注</span>');
+    actions.insertAdjacentHTML('afterbegin', `<button data-action="attention" data-id="${id}">${device.is_important ? '取消关注' : '重点关注'}</button>`);
+    actions.querySelector('[data-action="attention"]').onclick = event => managerAction(event.currentTarget);
+  });
+};
+
+const originalManagerAction = managerAction;
+managerAction = async function (button) {
+  if (button.dataset.action !== 'attention') return originalManagerAction(button);
+  const id = +button.dataset.id;
+  const device = devices.find(item => item.id === id);
+  if (!device) return;
+  const wasImportant = device.is_important;
+  try {
+    await api(`/api/devices/${id}`, {method: 'PATCH', body: JSON.stringify({is_important: !wasImportant})});
+    await refresh();
+    renderManager();
+    toast(wasImportant ? '已取消重点关注' : '已设为重点关注设备');
+  } catch (error) { toast(error.message); }
 };
 
 async function loadMaintenanceStatus() {

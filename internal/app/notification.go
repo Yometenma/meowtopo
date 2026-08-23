@@ -56,7 +56,6 @@ func (n *Notifier) NotifyScan(startedAt string, status ScanStatus) {
 	if parsed, parseErr := time.ParseDuration(settings["notification_cooldown"]); parseErr == nil && parsed >= 0 {
 		cooldown = parsed
 	}
-	importantOnly := settingEnabled(settings, "notification_important_only", false)
 	if settingEnabled(settings, "notification_new_device", true) {
 		rows, err := n.store.db.Query(`SELECT id,COALESCE(NULLIF(user_name,''),NULLIF(auto_hostname,''),NULLIF(current_ip,''),'未命名设备'),current_ip,is_important FROM devices WHERE created_manually=0 AND first_seen_at>=? ORDER BY id`, startedAt)
 		if err == nil {
@@ -64,7 +63,7 @@ func (n *Notifier) NotifyScan(startedAt string, status ScanStatus) {
 				var id int64
 				var name, ip string
 				var important bool
-				if rows.Scan(&id, &name, &ip, &important) == nil && (!importantOnly || important) && n.allowNotification(id, "new", cooldown) {
+				if rows.Scan(&id, &name, &ip, &important) == nil && n.allowNotification(id, "new", cooldown) {
 					lines = append(lines, fmt.Sprintf("发现新设备：%s%s", name, formatIP(ip)))
 					pending = append(pending, pendingNotification{id, "new"})
 				}
@@ -78,7 +77,7 @@ func (n *Notifier) NotifyScan(startedAt string, status ScanStatus) {
 			var deviceID int64
 			var name, ip, newStatus string
 			var important bool
-			if rows.Scan(&deviceID, &name, &ip, &newStatus, &important) != nil || (importantOnly && !important) {
+			if rows.Scan(&deviceID, &name, &ip, &newStatus, &important) != nil || !important {
 				continue
 			}
 			if newStatus == "online" && settingEnabled(settings, "notification_online", true) && n.allowNotification(deviceID, "online", cooldown) {

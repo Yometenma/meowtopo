@@ -123,16 +123,29 @@ func TestScanNotificationCombinesDeviceChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.db.Exec(`UPDATE devices SET first_seen_at='2020-01-01T00:00:00Z',status='offline' WHERE id=?`, offline.ID); err != nil {
+	if _, err = store.db.Exec(`UPDATE devices SET first_seen_at='2020-01-01T00:00:00Z',status='offline',is_important=1 WHERE id=?`, offline.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = store.db.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at) VALUES(?,'status','online','offline',?)`, offline.ID, now()); err != nil {
+		t.Fatal(err)
+	}
+	quiet, err := store.upsertSeen(Discovery{IP: "192.168.50.40", Hostname: "guest-tablet", Type: "phone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.Exec(`UPDATE devices SET first_seen_at='2020-01-01T00:00:00Z',status='offline' WHERE id=?`, quiet.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at) VALUES(?,'status','online','offline',?)`, quiet.ID, now()); err != nil {
 		t.Fatal(err)
 	}
 	newNotifier(store).NotifyScan(started, ScanStatus{})
 	message := <-messages
 	if !strings.Contains(message, newDevice.AutoHostname) || !strings.Contains(message, "发现新设备") || !strings.Contains(message, "设备已离线") || !strings.Contains(message, offline.AutoHostname) {
 		t.Fatalf("unexpected combined message: %s", message)
+	}
+	if strings.Contains(message, quiet.AutoHostname) {
+		t.Fatalf("unimportant device should not trigger an offline notification: %s", message)
 	}
 }
 
