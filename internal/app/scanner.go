@@ -107,6 +107,8 @@ func (s *Scanner) run(nets []*net.IPNet) {
 	seen := map[string]bool{}
 	var seenMu sync.Mutex
 	var wg sync.WaitGroup
+	sourceIP, _ := interfaceIPv4(cfg.Interface)
+	serviceEvidence := discoverServiceEvidence(ctx, sourceIP, 1200*time.Millisecond)
 	workers := cfg.Concurrency
 	if workers > s.Status().Total {
 		workers = s.Status().Total
@@ -115,7 +117,6 @@ func (s *Scanner) run(nets []*net.IPNet) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sourceIP, _ := interfaceIPv4(cfg.Interface)
 			for ip := range jobs {
 				result := probeTarget(ctx, ip, cfg)
 				mac := arpMAC(ip)
@@ -125,7 +126,7 @@ func (s *Scanner) run(nets []*net.IPNet) {
 					seen[ip] = true
 					seenMu.Unlock()
 					host := lookupDeviceName(ip, sourceIP)
-					identification := identifyDevice(host, mac, result.OpenPorts)
+					identification := identifyDevice(host, mac, result.OpenPorts, serviceEvidence[ip]...)
 					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host, mac), Type: identification.DeviceType, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
 					s.events.Emit("device_seen", d)
 				}
@@ -160,7 +161,6 @@ sendLoop:
 	}
 	close(jobs)
 	wg.Wait()
-	sourceIP, _ := interfaceIPv4(cfg.Interface)
 	for ip, mac := range arpNeighbors() {
 		parsed := net.ParseIP(ip)
 		if parsed == nil || !containsNetwork(nets, parsed) || seen[ip] {
@@ -168,7 +168,7 @@ sendLoop:
 		}
 		seen[ip] = true
 		host := lookupDeviceName(ip, sourceIP)
-		identification := identifyDevice(host, mac, nil)
+		identification := identifyDevice(host, mac, nil, serviceEvidence[ip]...)
 		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host, mac), Type: identification.DeviceType, ProbeMethod: "arp", TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
 		if err != nil {
 			continue

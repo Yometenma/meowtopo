@@ -43,8 +43,21 @@ func lookupMDNSName(ip string, sourceIP net.IP, timeout time.Duration) string {
 }
 
 func parseMDNSPTR(message []byte) string {
+	records := parseMDNSPTRRecords(message)
+	if len(records) > 0 {
+		return records[0].Target
+	}
+	return ""
+}
+
+type mdnsPTRRecord struct {
+	Name   string
+	Target string
+}
+
+func parseMDNSPTRRecords(message []byte) []mdnsPTRRecord {
 	if len(message) < 12 {
-		return ""
+		return nil
 	}
 	questions := int(binary.BigEndian.Uint16(message[4:6]))
 	records := int(binary.BigEndian.Uint16(message[6:8])) + int(binary.BigEndian.Uint16(message[8:10])) + int(binary.BigEndian.Uint16(message[10:12]))
@@ -52,30 +65,31 @@ func parseMDNSPTR(message []byte) string {
 	for range questions {
 		_, next, ok := dnsName(message, offset, 0)
 		if !ok || next+4 > len(message) {
-			return ""
+			return nil
 		}
 		offset = next + 4
 	}
+	var result []mdnsPTRRecord
 	for range records {
-		_, next, ok := dnsName(message, offset, 0)
+		owner, next, ok := dnsName(message, offset, 0)
 		if !ok || next+10 > len(message) {
-			return ""
+			return result
 		}
 		typ := binary.BigEndian.Uint16(message[next : next+2])
 		length := int(binary.BigEndian.Uint16(message[next+8 : next+10]))
 		data := next + 10
 		if data+length > len(message) {
-			return ""
+			return result
 		}
 		if typ == 12 {
 			name, _, valid := dnsName(message, data, 0)
 			if valid {
-				return strings.TrimSuffix(name, ".")
+				result = append(result, mdnsPTRRecord{Name: strings.TrimSuffix(owner, "."), Target: strings.TrimSuffix(name, ".")})
 			}
 		}
 		offset = data + length
 	}
-	return ""
+	return result
 }
 
 func dnsName(message []byte, offset, depth int) (string, int, bool) {

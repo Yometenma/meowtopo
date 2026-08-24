@@ -44,9 +44,10 @@ var deviceHostnameRules = []hostnameRule{
 	{"game", .74, []string{"playstation", "xbox", "nintendo", "steamdeck"}},
 }
 
-func identifyDevice(host, mac string, ports []int) identificationResult {
+func identifyDevice(host, mac string, ports []int, extra ...identificationEvidence) identificationResult {
 	evidence := hostnameEvidence(host)
 	evidence = append(evidence, portEvidence(ports)...)
+	evidence = append(evidence, extra...)
 	result := combineIdentificationEvidence(evidence)
 	if isLocallyAdministeredMAC(mac) {
 		result.Evidence = append(result.Evidence, "MAC：随机或本地管理地址，不用于判断厂商")
