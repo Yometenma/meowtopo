@@ -280,6 +280,21 @@ function ensureDashboardChrome() {
   main.querySelector('#canvasPage').insertAdjacentHTML('beforeend', `<div id="selectionBar" class="selection-bar hidden"><b><span id="selectionCount">0</span> 台已选</b><button type="button" data-align="horizontal">横向对齐</button><button type="button" data-align="vertical">纵向对齐</button><button type="button" id="clearSelectionBtn">取消选择</button></div>`);
   document.querySelector('.legend')?.insertAdjacentHTML('beforeend', '<span class="muted selection-hint">Shift + 拖动框选</span>');
   updateDashboardHealth();
+
+  const statusCards = [
+    [document.querySelector('#onlineN')?.closest('span'), 'online', '查看在线设备'],
+    [document.querySelector('#suspectN')?.closest('span'), 'suspected_offline', '查看疑似离线设备'],
+    [document.querySelector('#offlineN')?.closest('span'), 'offline', '查看离线设备'],
+    [document.querySelector('#totalN')?.closest('span'), '', '查看全部设备']
+  ];
+  statusCards.forEach(([card, status, label]) => {
+    if (!card) return;
+    card.classList.add('status-card');
+    card.dataset.status = status;
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', label);
+  });
 }
 
 let quickLinkSource = null;
@@ -644,6 +659,20 @@ bind = function () {
     }, 0);
   }));
   if (overview) overview.onclick = () => { closeWorkspacePages(); activateNav(overview); cy?.fit(undefined, 60); };
+  document.querySelectorAll('.status-card').forEach(card => {
+    const openFilteredDevices = () => {
+      document.querySelector('#manageBtn').click();
+      document.querySelector('#managerStatus').value = card.dataset.status;
+      renderManager();
+    };
+    card.onclick = openFilteredDevices;
+    card.onkeydown = event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openFilteredDevices();
+      }
+    };
+  });
   const accountButton = document.querySelector('#accountBtn');
   if (accountButton) {
     const action = accountButton.onclick;
