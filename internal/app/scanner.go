@@ -124,15 +124,9 @@ func (s *Scanner) run(nets []*net.IPNet) {
 					seenMu.Lock()
 					seen[ip] = true
 					seenMu.Unlock()
-					host := ""
-					if names, _ := net.LookupAddr(ip); len(names) > 0 {
-						host = names[0]
-					}
-					if host == "" {
-						host = lookupMDNSName(ip, sourceIP, 300*time.Millisecond)
-					}
+					host := lookupDeviceName(ip, sourceIP)
 					typ, source, confidence := identifyType(host, result.OpenPorts)
-					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Type: typ, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: source, TypeConfidence: confidence})
+					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host), Type: typ, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: source, TypeConfidence: confidence})
 					s.events.Emit("device_seen", d)
 				}
 				s.mu.Lock()
@@ -166,13 +160,16 @@ sendLoop:
 	}
 	close(jobs)
 	wg.Wait()
+	sourceIP, _ := interfaceIPv4(cfg.Interface)
 	for ip, mac := range arpNeighbors() {
 		parsed := net.ParseIP(ip)
 		if parsed == nil || !containsNetwork(nets, parsed) || seen[ip] {
 			continue
 		}
 		seen[ip] = true
-		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Type: "unknown", ProbeMethod: "arp"})
+		host := lookupDeviceName(ip, sourceIP)
+		typ, source, confidence := identifyType(host, nil)
+		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host), Type: typ, ProbeMethod: "arp", TypeSource: source, TypeConfidence: confidence})
 		if err != nil {
 			continue
 		}
@@ -202,6 +199,15 @@ sendLoop:
 	if s.notifier != nil {
 		go s.notifier.NotifyScan(st.StartedAt, st)
 	}
+}
+
+func lookupDeviceName(ip string, sourceIP net.IP) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	if names, _ := net.DefaultResolver.LookupAddr(ctx, ip); len(names) > 0 {
+		return names[0]
+	}
+	return lookupMDNSName(ip, sourceIP, 300*time.Millisecond)
 }
 
 func containsNetwork(nets []*net.IPNet, ip net.IP) bool {
@@ -263,7 +269,7 @@ func probePorts(enabled bool) []int {
 	if !enabled {
 		return nil
 	}
-	return []int{22, 53, 80, 443, 445, 554, 3389, 5000, 8008, 8123, 9100, 32400}
+	return []int{22, 53, 80, 443, 445, 548, 554, 631, 3389, 5000, 5357, 8008, 8123, 9100, 32400, 62078}
 }
 func icmpProbe(target string, sourceIP net.IP, timeout time.Duration) (bool, float64) {
 	addr := net.ParseIP(target)
@@ -414,15 +420,17 @@ func identifyType(host string, ports []int) (string, string, float64) {
 		confidence float64
 		words      []string
 	}{
-		{"nas", .92, []string{"synology", "qnap", "truenas", "openmediavault", "-nas", "nas-"}},
+		{"nas", .92, []string{"synology", "diskstation", "qnap", "truenas", "openmediavault", "asustor", "-nas", "nas-"}},
+		{"ap", .89, []string{"access-point", "wireless-ap", "unifi-ap", "uap-", "omada-ap"}},
 		{"router", .9, []string{"openwrt", "opnsense", "pfsense", "router", "gateway"}},
 		{"switch", .89, []string{"switch", "tl-sg", "tl-sl", "-sw-", "sw-core", "core-sw"}},
 		{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr"}},
 		{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet"}},
 		{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly", "tuya", "tasmota", "xiaomi", "yeelight", "aqara", "hue-bridge"}},
-		{"linux", .78, []string{"proxmox", "pve", "esxi", "server", "ubuntu", "debian"}},
+		{"linux", .78, []string{"proxmox", "pve", "esxi", "server", "ubuntu", "debian", "raspberrypi", "raspberry-pi"}},
 		{"windows", .76, []string{"desktop-", "laptop-", "win-pc", "surface"}},
 		{"macos", .76, []string{"macbook", "imac", "mac-mini"}},
+		{"tablet", .76, []string{"ipad", "tablet"}},
 		{"phone", .72, []string{"iphone", "android", "pixel", "phone", "galaxy", "huawei", "oneplus"}},
 		{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast", "firetv", "roku"}},
 		{"game", .74, []string{"playstation", "xbox", "nintendo", "steamdeck"}},
@@ -441,10 +449,18 @@ func identifyType(host string, ports []int) (string, string, float64) {
 	switch {
 	case open[8123]:
 		return "iot", "ports", .78
-	case open[9100]:
+	case open[9100] || (open[631] && (open[80] || open[443])):
 		return "printer", "ports", .82
+	case open[62078]:
+		return "phone", "ports", .76
 	case open[554]:
 		return "camera", "ports", .72
+	case open[5357]:
+		return "windows", "ports", .7
+	case open[548]:
+		return "macos", "ports", .7
+	case open[631]:
+		return "printer", "ports", .68
 	case open[8008]:
 		return "tv", "ports", .66
 	case open[5000] && (open[445] || open[22]):
@@ -452,14 +468,41 @@ func identifyType(host string, ports []int) (string, string, float64) {
 	case open[3389]:
 		return "windows", "ports", .68
 	case open[32400]:
-		return "nas", "ports", .62
+		return "linux", "ports", .5
 	case open[53] && (open[80] || open[443]):
 		return "router", "ports", .6
-	case open[445]:
-		return "nas", "ports", .55
 	case open[22]:
 		return "linux", "ports", .45
 	default:
 		return "unknown", "", 0
 	}
+}
+
+func identifyVendor(host string) string {
+	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	rules := []struct {
+		name  string
+		words []string
+	}{
+		{"Synology", []string{"synology", "diskstation"}},
+		{"QNAP", []string{"qnap"}},
+		{"TrueNAS", []string{"truenas"}},
+		{"ASUSTOR", []string{"asustor"}},
+		{"TP-Link", []string{"tp-link", "tplink", "tl-sg", "tl-sl", "deco"}},
+		{"Ubiquiti", []string{"ubiquiti", "unifi", "uap-"}},
+		{"Xiaomi", []string{"xiaomi", "miwifi", "yeelight", "aqara"}},
+		{"Apple", []string{"iphone", "ipad", "macbook", "imac", "mac-mini", "appletv", "homepod"}},
+		{"Google", []string{"chromecast", "google-home", "nest-"}},
+		{"Amazon", []string{"firetv", "echo-"}},
+		{"Samsung", []string{"samsung", "galaxy"}},
+		{"Raspberry Pi", []string{"raspberrypi", "raspberry-pi"}},
+	}
+	for _, rule := range rules {
+		for _, word := range rule.words {
+			if strings.Contains(host, word) {
+				return rule.name
+			}
+		}
+	}
+	return ""
 }

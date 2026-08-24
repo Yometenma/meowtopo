@@ -38,7 +38,10 @@ openDetail = function (id) {
       const type = connection.Type || connection.connection_type || 'unknown';
       const port = connection.Port || connection.port_label || '';
       const confirmed = connection.Confirmed ?? connection.user_confirmed;
-      return `<div class="connection-row"><div><b>${esc(parent ? nameOf(parent) : `设备 ${parentID}`)}</b><span>${esc(connectionTypeLabel(type))}${port ? ` · ${esc(port)}` : ''}</span><small>${confirmed ? '你确认的连接' : '系统推测的连接'}</small></div><button type="button" data-remove-connection="${connection.ID || connection.id}">移除</button></div>`;
+      const sourceType = connection.SourceType || connection.source_type || (confirmed ? 'manual' : 'inferred');
+      const confidence = Number(connection.Confidence ?? connection.confidence ?? 0);
+      const evidence = confirmed ? '你确认的连接 · 高可信度' : `${connectionSourceLabel(sourceType)} · ${confidence ? `可信度 ${Math.round(confidence * 100)}%` : '可信度未知'}`;
+      return `<div class="connection-row"><div><b>${esc(parent ? nameOf(parent) : `设备 ${parentID}`)}</b><span>${esc(connectionTypeLabel(type))}${port ? ` · ${esc(port)}` : ''}</span><small>${esc(evidence)}</small></div><button type="button" data-remove-connection="${connection.ID || connection.id}">移除</button></div>`;
     }).join('');
     parentSelect.closest('label').insertAdjacentHTML('beforebegin', `<section class="connection-list"><h3>当前连接 <span>${deviceConnections.length}</span></h3>${connectionList || '<p class="muted">还没有上级连接。</p>'}</section>`);
     document.querySelectorAll('[data-remove-connection]').forEach(button => button.onclick = async () => {
@@ -98,6 +101,10 @@ saveDetail = async function (device) {
 
 function connectionTypeLabel(type) {
   return {unknown: '未知连接', ethernet: '网线', wifi: 'Wi-Fi', logical: '逻辑连接', virtual: '虚拟连接'}[type] || '未知连接';
+}
+
+function connectionSourceLabel(source) {
+  return {manual: '用户设置', inferred: '系统低可信度推测', lldp: 'LLDP 发现', snmp: 'SNMP 发现', controller: '网络控制器提供'}[source] || '来源未知';
 }
 
 async function loadDeviceHistory(id, hours) {
@@ -452,7 +459,9 @@ function openConnectionMenu(edge, renderedPosition) {
   const menu = document.createElement('div');
   menu.id = 'topologyMenu';
   menu.className = 'topology-menu';
-  menu.innerHTML = `<div class="topology-menu-title">${esc(source ? nameOf(source) : '上级设备')} → ${esc(target ? nameOf(target) : '目标设备')}</div><small>${esc(connectionTypeLabel(edge.data('type')))}</small>${can(permission.edit) ? '<button data-remove-edge>移除这条连接</button>' : ''}`;
+  const sourceType = edge.data('sourceType') || 'inferred';
+  const confidence = Number(edge.data('confidence') || 0);
+  menu.innerHTML = `<div class="topology-menu-title">${esc(source ? nameOf(source) : '上级设备')} → ${esc(target ? nameOf(target) : '目标设备')}</div><small>${esc(connectionTypeLabel(edge.data('type')))} · ${esc(connectionSourceLabel(sourceType))}${confidence ? ` · ${Math.round(confidence * 100)}%` : ''}</small>${can(permission.edit) ? '<button data-remove-edge>移除这条连接</button>' : ''}`;
   const canvasRect = document.querySelector('#canvasPage').getBoundingClientRect();
   menu.style.left = `${Math.min(canvasRect.width - 210, Math.max(8, renderedPosition.x + 12))}px`;
   menu.style.top = `${Math.min(canvasRect.height - 150, Math.max(8, renderedPosition.y + 12))}px`;

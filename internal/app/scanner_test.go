@@ -52,12 +52,20 @@ func TestIdentifyType(t *testing.T) {
 		{"hostname router", "home-openwrt", "router", "hostname", nil},
 		{"hostname switch", "core-switch.local.", "switch", "hostname", nil},
 		{"TP-Link switch model", "TL-SG108E.local.", "switch", "hostname", nil},
+		{"wireless access point", "hall-unifi-ap", "ap", "hostname", nil},
 		{"Home Assistant port", "", "iot", "ports", []int{8123}},
 		{"camera port", "", "camera", "ports", []int{554}},
 		{"printer port", "", "printer", "ports", []int{9100}},
 		{"Windows remote desktop", "", "windows", "ports", []int{3389}},
+		{"Windows discovery", "", "windows", "ports", []int{5357}},
+		{"AirPrint printer", "", "printer", "ports", []int{631, 80}},
+		{"Apple file sharing", "", "macos", "ports", []int{548}},
+		{"iPhone sync", "", "phone", "ports", []int{62078}},
+		{"iPad hostname", "family-ipad.local.", "tablet", "hostname", nil},
 		{"game console hostname", "living-room-xbox", "game", "hostname", nil},
 		{"DNS web gateway", "", "router", "ports", []int{53, 443}},
+		{"SMB alone is ambiguous", "", "unknown", "", []int{445}},
+		{"Plex alone is a server", "", "linux", "ports", []int{32400}},
 		{"unknown", "living-room", "unknown", "", []int{80}},
 	}
 	for _, test := range tests {
@@ -70,6 +78,21 @@ func TestIdentifyType(t *testing.T) {
 				t.Fatal("identified device has no confidence")
 			}
 		})
+	}
+}
+
+func TestIdentifyVendorFromHostname(t *testing.T) {
+	tests := map[string]string{
+		"DiskStation-Synology.local.": "Synology",
+		"TL-SG108E.local.":            "TP-Link",
+		"family-iphone.local.":        "Apple",
+		"raspberrypi.local.":          "Raspberry Pi",
+		"living-room":                 "",
+	}
+	for host, want := range tests {
+		if got := identifyVendor(host); got != want {
+			t.Errorf("identifyVendor(%q)=%q, want %q", host, got, want)
+		}
 	}
 }
 
