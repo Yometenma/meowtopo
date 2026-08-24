@@ -225,7 +225,8 @@ function shellIcon(name) {
     activity: '<path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
     layout: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="m7.7 7.1 3.2 8.8m5.4-8.8-3.2 8.8M8 6h8"/>',
-    fit: '<path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/>'
+    fit: '<path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/>',
+    select: '<path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4"/><path d="M9 9h6v6H9z"/>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
 }
@@ -273,8 +274,197 @@ function ensureDashboardChrome() {
   layout.innerHTML = `${shellIcon('layout')}<span>整理布局</span>`;
   fit.innerHTML = `${shellIcon('fit')}<span>适应画布</span>`;
   toolbar.append(layout, fit);
+  toolbar.insertAdjacentHTML('afterbegin', `<button type="button" id="boxSelectBtn" class="${can(permission.edit) ? '' : 'hidden'}" title="框选多个设备">${shellIcon('select')}<span>框选</span></button>`);
+  main.querySelector('#canvasPage').insertAdjacentHTML('beforeend', `<div id="selectionBar" class="selection-bar hidden"><b><span id="selectionCount">0</span> 台已选</b><button type="button" data-align="horizontal">横向对齐</button><button type="button" data-align="vertical">纵向对齐</button><button type="button" id="clearSelectionBtn">取消选择</button></div>`);
   updateDashboardHealth();
 }
+
+let boxSelectionMode = false;
+let quickLinkSource = null;
+
+function closeTopologyMenu() {
+  document.querySelector('#topologyMenu')?.remove();
+}
+
+function updateSelectionBar() {
+  const count = cy ? cy.nodes(':selected').length : 0;
+  const bar = document.querySelector('#selectionBar');
+  if (!bar) return;
+  document.querySelector('#selectionCount').textContent = count;
+  bar.classList.toggle('hidden', count < 2);
+}
+
+function alignSelectedNodes(axis) {
+  if (!cy || !can(permission.edit)) return;
+  const selected = cy.nodes(':selected').filter(node => !node.locked());
+  if (selected.length < 2) return;
+  const values = selected.map(node => axis === 'horizontal' ? node.position('y') : node.position('x'));
+  const center = values.reduce((sum, value) => sum + value, 0) / values.length;
+  selected.forEach(node => {
+    node.position(axis === 'horizontal' ? {x: node.position('x'), y: center} : {x: center, y: node.position('y')});
+    savePosition(node);
+  });
+  toast(axis === 'horizontal' ? '已横向对齐选中设备' : '已纵向对齐选中设备');
+}
+
+function installDirectBoxSelection() {
+  const container = document.querySelector('#cy');
+  if (!container || container.dataset.boxSelectionReady) return;
+  container.dataset.boxSelectionReady = 'true';
+  container.addEventListener('mousedown', event => {
+    if (!boxSelectionMode || event.button !== 0 || !cy) return;
+    const containerRect = container.getBoundingClientRect();
+    const x = event.clientX - containerRect.left;
+    const y = event.clientY - containerRect.top;
+    const overNode = cy.nodes(':visible').some(node => {
+      const box = node.renderedBoundingBox({includeLabels: true, includeOverlays: true});
+      return x >= box.x1 && x <= box.x2 && y >= box.y1 && y <= box.y2;
+    });
+    if (overNode) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const page = document.querySelector('#canvasPage');
+    const pageRect = page.getBoundingClientRect();
+    const startX = event.clientX - pageRect.left;
+    const startY = event.clientY - pageRect.top;
+    const marquee = document.createElement('div');
+    marquee.className = 'selection-marquee';
+    page.appendChild(marquee);
+    const move = moveEvent => {
+      const currentX = moveEvent.clientX - pageRect.left;
+      const currentY = moveEvent.clientY - pageRect.top;
+      marquee.style.left = `${Math.min(startX, currentX)}px`;
+      marquee.style.top = `${Math.min(startY, currentY)}px`;
+      marquee.style.width = `${Math.abs(currentX - startX)}px`;
+      marquee.style.height = `${Math.abs(currentY - startY)}px`;
+    };
+    const finish = upEvent => {
+      window.removeEventListener('mousemove', move, true);
+      window.removeEventListener('mouseup', finish, true);
+      const endX = upEvent.clientX - containerRect.left;
+      const endY = upEvent.clientY - containerRect.top;
+      const left = Math.min(x, endX), right = Math.max(x, endX);
+      const top = Math.min(y, endY), bottom = Math.max(y, endY);
+      cy.nodes(':visible').forEach(node => {
+        const position = node.renderedPosition();
+        if (position.x >= left && position.x <= right && position.y >= top && position.y <= bottom) node.select();
+      });
+      marquee.remove();
+      updateSelectionBar();
+    };
+    move(event);
+    window.addEventListener('mousemove', move, true);
+    window.addEventListener('mouseup', finish, true);
+  }, true);
+}
+
+function setBoxSelectionMode(enabled) {
+  boxSelectionMode = enabled && can(permission.edit);
+  const button = document.querySelector('#boxSelectBtn');
+  button?.classList.toggle('active', boxSelectionMode);
+  if (!cy) return;
+  cy.boxSelectionEnabled(false);
+  cy.selectionType('additive');
+  cy.userPanningEnabled(!boxSelectionMode);
+  document.querySelector('#canvasPage')?.classList.toggle('box-selecting', boxSelectionMode);
+  if (boxSelectionMode) toast('在画布空白处拖动即可框选；拖动任一已选设备可整组移动');
+}
+
+async function createQuickConnection(targetID, connectionType) {
+  if (!quickLinkSource || quickLinkSource === targetID) return;
+  try {
+    await api(`/api/devices/${targetID}/connections`, {method: 'POST', body: JSON.stringify({parent_id: quickLinkSource, connection_type: connectionType, port_label: ''})});
+    const source = devices.find(device => device.id === quickLinkSource);
+    const target = devices.find(device => device.id === targetID);
+    quickLinkSource = null;
+    cy.nodes().removeClass('link-source');
+    closeTopologyMenu();
+    await refresh();
+    toast(`已连接：${source ? nameOf(source) : '上级设备'} → ${target ? nameOf(target) : '目标设备'}`);
+  } catch (error) { toast(error.message); }
+}
+
+function openTopologyMenu(node, renderedPosition) {
+  closeTopologyMenu();
+  const id = +node.id();
+  const editable = can(permission.edit);
+  const menu = document.createElement('div');
+  menu.id = 'topologyMenu';
+  menu.className = 'topology-menu';
+  const linkChoices = quickLinkSource && quickLinkSource !== id ? `<div class="topology-menu-title">连接到 ${esc(nameOf(devices.find(device => device.id === id) || {user_name: '此设备'}))}</div><button data-link-type="ethernet">网线连接</button><button data-link-type="wifi">Wi-Fi 连接</button><button data-link-type="logical">逻辑连接</button><button data-link-type="virtual">虚拟连接</button><button data-cancel-link>取消连线</button>` : `${editable ? '<button data-start-link>从此设备开始连线</button>' : ''}<button data-toggle-select>${node.selected() ? '取消选择' : '加入选择'}</button><button data-open-detail>查看详情</button>`;
+  menu.innerHTML = linkChoices;
+  const canvasRect = document.querySelector('#canvasPage').getBoundingClientRect();
+  menu.style.left = `${Math.min(canvasRect.width - 190, Math.max(8, renderedPosition.x + 12))}px`;
+  menu.style.top = `${Math.min(canvasRect.height - 230, Math.max(8, renderedPosition.y + 12))}px`;
+  document.querySelector('#canvasPage').appendChild(menu);
+  menu.querySelector('[data-start-link]')?.addEventListener('click', () => {
+    quickLinkSource = id;
+    cy.nodes().removeClass('link-source');
+    node.addClass('link-source');
+    closeTopologyMenu();
+    toast(`已选择“${nameOf(devices.find(device => device.id === id))}”作为上级，请右键或长按目标设备`);
+  });
+  menu.querySelector('[data-toggle-select]')?.addEventListener('click', () => {
+    node.selected() ? node.unselect() : node.select();
+    closeTopologyMenu();
+  });
+  menu.querySelector('[data-open-detail]')?.addEventListener('click', () => { closeTopologyMenu(); openDetail(id); });
+  menu.querySelector('[data-cancel-link]')?.addEventListener('click', () => { quickLinkSource = null; cy.nodes().removeClass('link-source'); closeTopologyMenu(); });
+  menu.querySelectorAll('[data-link-type]').forEach(button => button.addEventListener('click', () => createQuickConnection(id, button.dataset.linkType)));
+}
+
+function openConnectionMenu(edge, renderedPosition) {
+  closeTopologyMenu();
+  const targetID = +(edge.data('target') || 0);
+  const connectionID = +(String(edge.id()).replace(/^e/, '') || 0);
+  const source = devices.find(device => device.id === +(edge.data('source') || 0));
+  const target = devices.find(device => device.id === targetID);
+  const menu = document.createElement('div');
+  menu.id = 'topologyMenu';
+  menu.className = 'topology-menu';
+  menu.innerHTML = `<div class="topology-menu-title">${esc(source ? nameOf(source) : '上级设备')} → ${esc(target ? nameOf(target) : '目标设备')}</div><small>${esc(connectionTypeLabel(edge.data('type')))}</small>${can(permission.edit) ? '<button data-remove-edge>移除这条连接</button>' : ''}`;
+  const canvasRect = document.querySelector('#canvasPage').getBoundingClientRect();
+  menu.style.left = `${Math.min(canvasRect.width - 210, Math.max(8, renderedPosition.x + 12))}px`;
+  menu.style.top = `${Math.min(canvasRect.height - 150, Math.max(8, renderedPosition.y + 12))}px`;
+  document.querySelector('#canvasPage').appendChild(menu);
+  menu.querySelector('[data-remove-edge]')?.addEventListener('click', async () => {
+    if (!confirm('确定移除这条连接吗？设备本身不会被删除。')) return;
+    try {
+      await api(`/api/devices/${targetID}/connections/${connectionID}`, {method: 'DELETE'});
+      closeTopologyMenu();
+      await refresh();
+      toast('连接已移除');
+    } catch (error) { toast(error.message); }
+  });
+}
+
+const originalInitCyForEditor = initCy;
+initCy = function () {
+  originalInitCyForEditor();
+  if (!cy) return;
+  cy.boxSelectionEnabled(false);
+  cy.selectionType('additive');
+  cy.style().selector('node.link-source').style({'border-width': 5, 'border-color': '#df9a3d', 'underlay-color': '#df9a3d', 'underlay-opacity': .2, 'underlay-padding': 12}).update();
+  cy.off('tap', 'node');
+  cy.on('tap', 'node', event => {
+    if (boxSelectionMode) {
+      event.target.selected() ? event.target.unselect() : event.target.select();
+      return;
+    }
+    openDetail(+event.target.id());
+  });
+  cy.off('dragfree', 'node');
+  cy.on('dragfree', 'node', event => {
+    const moved = event.target.selected() ? cy.nodes(':selected') : event.target;
+    moved.forEach(node => savePosition(node));
+  });
+  cy.on('cxttap', 'node', event => openTopologyMenu(event.target, event.renderedPosition));
+  cy.on('cxttap', 'edge', event => openConnectionMenu(event.target, event.renderedPosition));
+  cy.on('select unselect', 'node', updateSelectionBar);
+  cy.on('tap pan zoom', event => { if (event.target === cy) closeTopologyMenu(); });
+  document.querySelector('#cy').addEventListener('contextmenu', event => event.preventDefault());
+  installDirectBoxSelection();
+};
 
 function updateDashboardHealth() {
   const target = document.querySelector('#networkHealthText');
@@ -366,6 +556,24 @@ bind = function () {
   ensureQualityTools();
   originalBind();
   ensureDashboardChrome();
+  document.querySelector('#boxSelectBtn').onclick = () => setBoxSelectionMode(!boxSelectionMode);
+  document.querySelector('#clearSelectionBtn').onclick = () => { cy?.nodes().unselect(); setBoxSelectionMode(false); };
+  document.querySelectorAll('#selectionBar [data-align]').forEach(button => button.onclick = () => alignSelectedNodes(button.dataset.align));
+  document.addEventListener('keydown', event => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+    if (event.key === 'Escape') {
+      closeTopologyMenu();
+      quickLinkSource = null;
+      cy?.nodes().removeClass('link-source');
+      cy?.nodes().unselect();
+      setBoxSelectionMode(false);
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && cy && can(permission.edit)) {
+      event.preventDefault();
+      cy.nodes(':visible').select();
+      updateSelectionBar();
+    }
+  });
   document.querySelector('#aboutTab').onclick = async () => {
     showPane('about');
     const result = await api('/api/version');
