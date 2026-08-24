@@ -231,6 +231,22 @@ function shellIcon(name) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
 }
 
+function ensureCanvasHelpUI() {
+  if (document.querySelector('#canvasHelpDialog')) return;
+  document.body.insertAdjacentHTML('beforeend', `<dialog id="canvasHelpDialog" class="canvas-help-dialog">
+    <div class="canvas-help-head"><div><span class="page-kicker">TOPOLOGY GUIDE</span><h2 id="canvasHelpTitle">拓扑操作指南</h2><p>不用切换编辑模式，直接在画布上操作。</p></div><button type="button" id="canvasHelpClose">关闭</button></div>
+    <div class="canvas-help-platforms">
+      <section><b>Windows</b><dl><dt>移动画布</dt><dd>按住空白处拖动</dd><dt>缩放</dt><dd>滚轮</dd><dt>框选多个</dt><dd>Shift + 拖动空白处</dd><dt>快捷操作</dt><dd>右键设备或连接线</dd><dt>全选</dt><dd>Ctrl + A</dd></dl></section>
+      <section><b>macOS</b><dl><dt>移动画布</dt><dd>按住空白处拖动</dd><dt>缩放</dt><dd>触控板捏合或滚动</dd><dt>框选多个</dt><dd>Shift + 拖动空白处</dd><dt>快捷操作</dt><dd>双指点按设备或连接线</dd><dt>全选</dt><dd>⌘ + A</dd></dl></section>
+      <section><b>手机与平板</b><dl><dt>移动画布</dt><dd>单指拖动空白处</dd><dt>缩放</dt><dd>双指捏合</dd><dt>选择多个</dt><dd>点“选择”，再逐个点设备</dd><dt>快捷操作</dt><dd>长按设备或连接线</dd><dt>移动一组</dt><dd>拖动任意已选设备</dd></dl></section>
+    </div>
+    <section class="connection-guide"><h3>连接方式代表什么</h3><div><article><b>网线</b><p>确认设备之间存在有线连接。</p></article><article><b>Wi-Fi</b><p>确认设备通过无线网络接入上级。</p></article><article><b>逻辑连接</b><p>表示流量、路由或服务上的上下级，不宣称真实网线接法。</p></article><article><b>虚拟连接</b><p>用于虚拟机、容器、虚拟网桥等软件关系。</p></article><article><b>未知连接</b><p>知道设备有关联，但目前不能确定连接方式。</p></article><article><b>虚线推测</b><p>由喵拓根据有限信息推测，可由你手动确认或修改。</p></article></div></section>
+  </dialog>`);
+  const dialog = document.querySelector('#canvasHelpDialog');
+  dialog.setAttribute('aria-labelledby', 'canvasHelpTitle');
+  document.querySelector('#canvasHelpClose').onclick = () => dialog.close();
+}
+
 function ensureDashboardChrome() {
   if (document.querySelector('#appSidebar')) return;
   document.body.classList.add('dashboard-shell');
@@ -276,10 +292,12 @@ function ensureDashboardChrome() {
   layout.innerHTML = `${shellIcon('layout')}<span>整理布局</span>`;
   fit.innerHTML = `${shellIcon('fit')}<span>适应画布</span>`;
   toolbar.append(layout, fit);
+  toolbar.insertAdjacentHTML('beforeend', '<button type="button" id="canvasHelpBtn" title="查看拓扑操作指南"><b class="help-symbol">?</b><span>使用帮助</span></button>');
   toolbar.insertAdjacentHTML('afterbegin', `<button type="button" id="mobileSelectBtn" class="mobile-select-button${can(permission.edit) ? '' : ' hidden'}" title="选择多个设备">${shellIcon('select')}<span>选择</span></button>`);
   main.querySelector('#canvasPage').insertAdjacentHTML('beforeend', `<div id="selectionBar" class="selection-bar hidden"><b><span id="selectionCount">0</span> 台已选</b><button type="button" data-align="horizontal">横向对齐</button><button type="button" data-align="vertical">纵向对齐</button><button type="button" id="clearSelectionBtn">取消选择</button></div>`);
   document.querySelector('.legend')?.insertAdjacentHTML('beforeend', '<span class="muted selection-hint">Shift + 拖动框选</span>');
   updateDashboardHealth();
+  ensureCanvasHelpUI();
 
   const statusCards = [
     [document.querySelector('#onlineN')?.closest('span'), 'online', '查看在线设备'],
@@ -598,6 +616,7 @@ bind = function () {
   originalBind();
   ensureDashboardChrome();
   document.querySelector('#mobileSelectBtn').onclick = () => setMobileSelectionMode(!mobileSelectionMode);
+  document.querySelector('#canvasHelpBtn').onclick = () => document.querySelector('#canvasHelpDialog').showModal();
   document.querySelector('#clearSelectionBtn').onclick = () => { cy?.nodes().unselect(); setMobileSelectionMode(false); };
   document.querySelectorAll('#selectionBar [data-align]').forEach(button => button.onclick = () => alignSelectedNodes(button.dataset.align));
   document.addEventListener('keydown', event => {
@@ -614,6 +633,7 @@ bind = function () {
       cy.nodes(':visible').select();
       updateSelectionBar();
     }
+    if (event.key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey) document.querySelector('#canvasHelpDialog')?.showModal();
   });
   document.querySelector('#aboutTab').onclick = async () => {
     showPane('about');
