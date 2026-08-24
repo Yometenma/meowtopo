@@ -14,6 +14,8 @@ html.dark{color-scheme:dark;--bg:#17221e;--panel:#202f29;--text:#e8f1ed;--muted:
 .dashboard-shell .app-sidebar .brand{height:54px;padding:6px 8px;margin-bottom:24px;text-align:left;flex:none}.dashboard-shell .app-sidebar .brand:hover{transform:none}.dashboard-shell .app-sidebar .brand b{font-size:16px;letter-spacing:-.02em}.dashboard-shell .app-sidebar .brand small{margin-top:1px}
 .sidebar-nav{display:grid;gap:7px}.nav-button{width:100%;display:flex;align-items:center;gap:12px;border:0;background:transparent;padding:11px 12px;color:var(--muted);font-weight:650;text-align:left}.nav-button svg,.canvas-toolbar svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}.nav-button:hover,.nav-button.active{color:var(--text);background:var(--mint2);transform:none}.nav-button.active{box-shadow:inset 3px 0 0 var(--mint)}
 .sidebar-foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:12px;color:var(--muted);font-size:12px}.sidebar-pulse{width:8px;height:8px;border-radius:50%;background:#5ec98b;box-shadow:0 0 0 5px #5ec98b1c}
+.sidebar-foot.disconnected .sidebar-pulse{background:var(--yellow);box-shadow:0 0 0 5px color-mix(in srgb,var(--yellow) 18%,transparent)}
+.dashboard-shell button:disabled{cursor:wait;opacity:.68;transform:none}
 .dashboard-shell .topbar{position:fixed;left:var(--sidebar);right:0;top:0;height:var(--header);min-height:var(--header);padding:12px 22px;gap:20px;align-items:center;background:color-mix(in srgb,var(--panel) 91%,transparent);backdrop-filter:blur(16px);box-shadow:0 8px 30px #3155450a}.dashboard-shell main{position:fixed;left:var(--sidebar);right:0;top:var(--header);bottom:0;height:auto}.dashboard-shell .canvas-page,.dashboard-shell #cy{height:100%}.page-heading{display:grid;min-width:145px;line-height:1.2}.page-heading small{color:var(--muted);font-size:11px}.page-heading strong{font-size:18px;letter-spacing:-.02em;margin-top:3px}
 .dashboard-shell .stats{margin:0 auto 0 0;gap:8px}.dashboard-shell .stats span{display:grid;grid-template-columns:auto auto;align-items:center;gap:0 5px;min-width:76px;padding:8px 11px;border:1px solid var(--line);border-radius:12px;background:var(--panel-soft);font-size:11px;color:var(--muted)}.dashboard-shell .stats span b{font-size:16px;color:var(--text);line-height:1}.dashboard-shell .stats .dot{grid-row:1/3;margin:0}.dashboard-shell .actions{gap:8px}.dashboard-shell .search{height:42px;border-radius:12px;background:var(--bg)}.dashboard-shell .search input{width:180px}.dashboard-shell #scanBtn{height:42px;border-radius:12px;box-shadow:0 7px 18px color-mix(in srgb,var(--mint) 24%,transparent)}.dashboard-shell #themeBtn,.dashboard-shell #accountBtn{height:42px;display:inline-flex;align-items:center}
 .canvas-toolbar{position:absolute;right:22px;top:18px;z-index:9;display:flex;gap:7px;padding:6px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--panel) 92%,transparent);box-shadow:var(--shadow-soft);backdrop-filter:blur(12px)}.canvas-toolbar button{display:flex;align-items:center;gap:7px;border:0;background:transparent;padding:8px 10px;color:var(--muted)}.canvas-toolbar button:hover{background:var(--mint2);color:var(--text);transform:none}.dashboard-shell .legend{left:22px;bottom:20px;border-radius:14px;box-shadow:var(--shadow-soft);background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(12px)}
@@ -83,6 +85,15 @@ html.dark .dashboard-shell .canvas-page{box-shadow:0 18px 55px #0004,inset 0 1px
 
 /* Workspace pages replace the topology canvas, so canvas-only actions stay hidden. */
 .workspace-open .fab{display:none}
+.workspace-open .topbar .search{visibility:hidden;pointer-events:none}
+.page-heading strong{transition:opacity .15s ease}
+.nav-button[aria-current="page"]{font-weight:750}
+
+@media(max-width:700px){
+  .workspace-open .topbar .search{display:none}
+  .dashboard-shell .page-heading{min-width:0;flex:1}
+  .dashboard-shell .page-heading strong{font-size:17px}
+}
 
 @media(max-width:700px){
   .dashboard-shell .app-sidebar{height:calc(64px + env(safe-area-inset-bottom));padding-bottom:calc(7px + env(safe-area-inset-bottom))}

@@ -252,15 +252,17 @@ function ensureDashboardChrome() {
     [document.querySelector('#settingsBtn'), 'settings', '系统设置']
   ];
   entries.forEach(([button, icon, label]) => {
+    button.dataset.workspace = icon;
+    button.setAttribute('aria-label', label);
     button.classList.remove('primary');
     button.classList.add('nav-button');
     button.innerHTML = `${shellIcon(icon)}<span>${label}</span>`;
     nav.appendChild(button);
   });
-  nav.insertAdjacentHTML('afterbegin', `<button type="button" class="nav-button active" id="overviewNav">${shellIcon('home')}<span>拓扑总览</span></button>`);
+  nav.insertAdjacentHTML('afterbegin', `<button type="button" class="nav-button active" id="overviewNav" data-workspace="overview" aria-label="拓扑总览" aria-current="page">${shellIcon('home')}<span>拓扑总览</span></button>`);
   document.querySelector('#overviewNav').onclick = () => cy?.fit(undefined, 60);
 
-  header.insertAdjacentHTML('afterbegin', '<div class="page-heading"><small>家庭网络中心</small><strong>网络拓扑</strong></div>');
+  header.insertAdjacentHTML('afterbegin', '<div class="page-heading" aria-live="polite"><small id="pageEyebrow">家庭网络中心</small><strong id="pageTitle">网络拓扑</strong></div>');
   main.querySelector('#canvasPage').insertAdjacentHTML('beforeend', `
     <section class="canvas-context" aria-label="拓扑状态">
       <span class="context-kicker"><i></i> LIVE TOPOLOGY</span>
@@ -588,6 +590,13 @@ bind = function () {
     document.querySelector('#versionText').textContent = value.startsWith('dev-') ? `开发版 · ${value.slice(4)}` : value === 'dev' ? '开发版 · 本地构建' : `版本 ${value}`;
   };
   const overview = document.querySelector('#overviewNav');
+  const workspaceMeta = {
+    overview: ['家庭网络中心', '网络拓扑'],
+    devices: ['设备与连接', '设备管理'],
+    activity: ['扫描与状态变化', '运行记录'],
+    settings: ['扫描、通知与数据', '系统设置'],
+    account: ['成员与访问权限', '账户管理']
+  };
   const navPages = [
     [document.querySelector('#manageBtn'), document.querySelector('#managerClose')],
     [document.querySelector('#activityBtn'), document.querySelector('#activityClose')],
@@ -599,18 +608,28 @@ bind = function () {
     const dialog = document.querySelector(`#${id}`);
     if (dialog?.open) dialog.close();
   });
-  const activateNav = button => {
-    document.querySelectorAll('.sidebar-nav .nav-button').forEach(item => item.classList.toggle('active', item === button));
-    document.body.classList.toggle('workspace-open', button !== overview);
+  const activateNav = (button, workspace = button?.dataset.workspace || 'overview') => {
+    document.querySelectorAll('.sidebar-nav .nav-button').forEach(item => {
+      const active = item === button;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
+    const [eyebrow, title] = workspaceMeta[workspace] || workspaceMeta.overview;
+    document.querySelector('#pageEyebrow').textContent = eyebrow;
+    document.querySelector('#pageTitle').textContent = title;
+    document.title = `${title} · MeowTopo 喵拓`;
+    document.body.dataset.workspace = workspace;
+    document.body.classList.toggle('workspace-open', workspace !== 'overview');
   };
   navPages.forEach(([open, close]) => {
     if (open) {
       const action = open.onclick;
       open.onclick = async event => {
         closeWorkspacePages();
-        activateNav(open);
+        activateNav(open, open.dataset.workspace);
         const result = await action?.call(open, event);
-        if (workspaceDialogs.some(id => document.querySelector(`#${id}`)?.open)) activateNav(open);
+        if (workspaceDialogs.some(id => document.querySelector(`#${id}`)?.open)) activateNav(open, open.dataset.workspace);
         return result;
       };
     }
@@ -625,6 +644,17 @@ bind = function () {
     }, 0);
   }));
   if (overview) overview.onclick = () => { closeWorkspacePages(); activateNav(overview); cy?.fit(undefined, 60); };
+  const accountButton = document.querySelector('#accountBtn');
+  if (accountButton) {
+    const action = accountButton.onclick;
+    accountButton.onclick = async event => {
+      closeWorkspacePages();
+      activateNav(null, 'account');
+      return action?.call(accountButton, event);
+    };
+  }
+  document.querySelector('#managerClose').textContent = '返回拓扑';
+  document.querySelector('#accountClose').textContent = '返回拓扑';
   document.querySelectorAll('[data-activity-pane]').forEach(button => button.onclick = () => {
     document.querySelectorAll('[data-activity-pane]').forEach(item => item.classList.toggle('active', item === button));
     document.querySelectorAll('[data-activity-content]').forEach(pane => pane.classList.toggle('hidden', pane.dataset.activityContent !== button.dataset.activityPane));
