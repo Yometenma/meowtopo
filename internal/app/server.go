@@ -8,6 +8,7 @@ import (
 	"embed"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -116,6 +117,8 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("POST /api/devices/{id}/unhide", s.require(PermEditDevices, s.visibility(false)))
 	m.Handle("PATCH /api/devices/{id}/position", s.require(PermEditDevices, s.position))
 	m.Handle("PATCH /api/devices/{id}/connection", s.require(PermEditDevices, s.connection))
+	m.Handle("POST /api/devices/{id}/connections", s.require(PermEditDevices, s.addConnection))
+	m.Handle("DELETE /api/devices/{id}/connections/{connection}", s.require(PermEditDevices, s.deleteConnection))
 	m.Handle("GET /api/topology", s.require(PermView, s.topology))
 	m.Handle("POST /api/topology/layout/reset", s.require(PermEditDevices, s.resetLayout))
 	m.Handle("POST /api/scan", s.require(PermRunScans, s.startScan))
@@ -254,9 +257,16 @@ func (s *Server) batchDevices(w http.ResponseWriter, r *http.Request) {
 		default:
 			v.ConnectionType = "unknown"
 		}
-		if _, err = tx.Exec(`DELETE FROM connections WHERE target_device_id IN (`+placeholders+`)`, args...); err == nil {
+		if _, err = tx.Exec(`DELETE FROM connections WHERE user_confirmed=0 AND target_device_id IN (`+placeholders+`)`, args...); err == nil {
 			for _, id := range ids {
-				_, err = tx.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,source_type,confidence,user_confirmed,created_at,updated_at)VALUES(?,?,?,'manual',1,1,?,?)`, v.ParentID, id, v.ConnectionType, now(), now())
+				var cycle bool
+				cycle, err = connectionWouldCycle(tx, v.ParentID, id)
+				if err == nil && cycle {
+					err = fmt.Errorf("connection cycle for device %d", id)
+				}
+				if err == nil {
+					_, err = tx.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,source_type,confidence,user_confirmed,created_at,updated_at)VALUES(?,?,?,'manual',1,1,?,?) ON CONFLICT(source_device_id,target_device_id) DO UPDATE SET connection_type=excluded.connection_type,source_type='manual',confidence=1,user_confirmed=1,updated_at=excluded.updated_at`, v.ParentID, id, v.ConnectionType, now(), now())
+				}
 				if err != nil {
 					break
 				}
@@ -572,6 +582,102 @@ func (s *Server) connection(w http.ResponseWriter, r *http.Request) {
 	}
 	s.events.Emit("topology_changed", map[string]int64{"device_id": id})
 	jsonOut(w, 200, map[string]bool{"saved": true})
+}
+
+func normalizeConnectionType(value string) string {
+	switch value {
+	case "ethernet", "wifi", "unknown", "virtual", "logical":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func connectionWouldCycle(tx *sql.Tx, parentID, childID int64) (bool, error) {
+	var found int
+	err := tx.QueryRow(`WITH RECURSIVE descendants(id) AS (
+		SELECT target_device_id FROM connections WHERE source_device_id=?
+		UNION
+		SELECT c.target_device_id FROM connections c JOIN descendants d ON c.source_device_id=d.id
+	) SELECT 1 FROM descendants WHERE id=? LIMIT 1`, childID, parentID).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// addConnection adds or updates one parent relation without removing the
+// device's other user-confirmed relations. The first manual relation replaces
+// only low-confidence inferred defaults, which avoids keeping a misleading
+// gateway edge next to the relation the user just confirmed.
+func (s *Server) addConnection(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	var v struct {
+		ParentID       int64  `json:"parent_id"`
+		ConnectionType string `json:"connection_type"`
+		PortLabel      string `json:"port_label"`
+	}
+	if err != nil || decode(r, &v) != nil || v.ParentID <= 0 || v.ParentID == id {
+		fail(w, 400, "invalid_request", "请选择有效的上级设备")
+		return
+	}
+	v.ConnectionType = normalizeConnectionType(v.ConnectionType)
+	tx, err := s.store.db.Begin()
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	defer tx.Rollback()
+	var count int
+	if err = tx.QueryRow(`SELECT COUNT(*) FROM devices WHERE id IN (?,?)`, id, v.ParentID).Scan(&count); err != nil || count != 2 {
+		fail(w, 400, "invalid_parent", "设备或上级设备不存在")
+		return
+	}
+	cycle, err := connectionWouldCycle(tx, v.ParentID, id)
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	if cycle {
+		fail(w, 400, "connection_cycle", "这条连接会形成循环，请选择其他上级设备")
+		return
+	}
+	t := now()
+	if _, err = tx.Exec(`DELETE FROM connections WHERE target_device_id=? AND user_confirmed=0`, id); err == nil {
+		_, err = tx.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,port_label,source_type,confidence,user_confirmed,created_at,updated_at)
+			VALUES(?,?,?,?, 'manual',1,1,?,?)
+			ON CONFLICT(source_device_id,target_device_id) DO UPDATE SET connection_type=excluded.connection_type,port_label=excluded.port_label,source_type='manual',confidence=1,user_confirmed=1,updated_at=excluded.updated_at`, v.ParentID, id, v.ConnectionType, strings.TrimSpace(v.PortLabel), t, t)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	s.events.Emit("topology_changed", map[string]int64{"device_id": id})
+	jsonOut(w, 200, map[string]bool{"saved": true})
+}
+
+func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	connectionID, parseErr := strconv.ParseInt(r.PathValue("connection"), 10, 64)
+	if err != nil || parseErr != nil || connectionID <= 0 {
+		fail(w, 400, "invalid_request", "连接编号无效")
+		return
+	}
+	result, err := s.store.db.Exec(`DELETE FROM connections WHERE id=? AND target_device_id=?`, connectionID, id)
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	removed, _ := result.RowsAffected()
+	if removed == 0 {
+		fail(w, 404, "not_found", "连接不存在")
+		return
+	}
+	s.events.Emit("topology_changed", map[string]int64{"device_id": id})
+	jsonOut(w, 200, map[string]bool{"deleted": true})
 }
 func (s *Server) topology(w http.ResponseWriter, r *http.Request) {
 	d, e := s.store.devices()

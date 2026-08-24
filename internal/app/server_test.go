@@ -205,6 +205,75 @@ func TestConnectionCanBeCleared(t *testing.T) {
 	}
 }
 
+func TestDeviceCanHaveMultipleParentConnections(t *testing.T) {
+	s := testServer(t)
+	switchDevice, _ := s.store.createManual("交换机", "switch", "")
+	serverDevice, _ := s.store.createManual("服务器", "server", "")
+	child, _ := s.store.createManual("旁路由", "router", "")
+
+	add := func(parentID int64, kind, port string) *httptest.ResponseRecorder {
+		body := fmt.Sprintf(`{"parent_id":%d,"connection_type":%q,"port_label":%q}`, parentID, kind, port)
+		req := httptest.NewRequest(http.MethodPost, "/api/devices/id/connections", bytes.NewBufferString(body))
+		req.SetPathValue("id", fmt.Sprint(child.ID))
+		rec := httptest.NewRecorder()
+		s.addConnection(rec, req)
+		return rec
+	}
+	if rec := add(switchDevice.ID, "ethernet", "LAN 口"); rec.Code != http.StatusOK {
+		t.Fatalf("first connection status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := add(serverDevice.ID, "virtual", "运行在服务器上"); rec.Code != http.StatusOK {
+		t.Fatalf("second connection status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := add(switchDevice.ID, "ethernet", "交换机 3 号口"); rec.Code != http.StatusOK {
+		t.Fatalf("update connection status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	links, err := s.store.connections()
+	if err != nil || len(links) != 2 {
+		t.Fatalf("connections=%+v err=%v", links, err)
+	}
+	var removeID int64
+	for _, link := range links {
+		if link.SourceID == switchDevice.ID {
+			removeID = link.ID
+			if link.Port != "交换机 3 号口" {
+				t.Fatalf("connection was duplicated instead of updated: %+v", link)
+			}
+		}
+	}
+	req := httptest.NewRequest(http.MethodDelete, "/api/devices/id/connections/connection", nil)
+	req.SetPathValue("id", fmt.Sprint(child.ID))
+	req.SetPathValue("connection", fmt.Sprint(removeID))
+	rec := httptest.NewRecorder()
+	s.deleteConnection(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	links, _ = s.store.connections()
+	if len(links) != 1 || links[0].SourceID != serverDevice.ID {
+		t.Fatalf("deleting one connection affected another: %+v", links)
+	}
+}
+
+func TestMultipleConnectionsRejectCycles(t *testing.T) {
+	s := testServer(t)
+	a, _ := s.store.createManual("A", "switch", "")
+	b, _ := s.store.createManual("B", "router", "")
+	_, err := s.store.db.Exec(`INSERT INTO connections(source_device_id,target_device_id,connection_type,source_type,confidence,user_confirmed,created_at,updated_at) VALUES(?,?,'ethernet','manual',1,1,?,?)`, a.ID, b.ID, now(), now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"parent_id":%d,"connection_type":"ethernet"}`, b.ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/devices/id/connections", bytes.NewBufferString(body))
+	req.SetPathValue("id", fmt.Sprint(a.ID))
+	rec := httptest.NewRecorder()
+	s.addConnection(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "connection_cycle") {
+		t.Fatalf("cycle status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestBatchDeviceActions(t *testing.T) {
 	s := testServer(t)
 	parent, _ := s.store.createManual("核心交换机", "switch", "")
