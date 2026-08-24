@@ -90,9 +90,40 @@ func TestIdentifyVendorFromHostname(t *testing.T) {
 		"living-room":                 "",
 	}
 	for host, want := range tests {
-		if got := identifyVendor(host); got != want {
+		if got := identifyVendor(host, "00:11:22:33:44:55"); got != want {
 			t.Errorf("identifyVendor(%q)=%q, want %q", host, got, want)
 		}
+	}
+}
+
+func TestIdentificationCombinesSupportingEvidence(t *testing.T) {
+	result := identifyDevice("office-printer.local.", "00:11:22:33:44:55", []int{631, 9100})
+	if result.DeviceType != "printer" || result.Source != "hostname+ports" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if result.Confidence <= .86 || len(result.Evidence) != 3 {
+		t.Fatalf("supporting evidence did not raise confidence: %+v", result)
+	}
+}
+
+func TestIdentificationConflictReducesConfidence(t *testing.T) {
+	result := identifyDevice("living-room-xbox", "00:11:22:33:44:55", []int{554})
+	if result.DeviceType != "game" || result.Confidence >= .74 {
+		t.Fatalf("conflicting evidence was not reflected: %+v", result)
+	}
+}
+
+func TestRandomMACDoesNotClaimHostnameVendor(t *testing.T) {
+	mac := "02:11:22:33:44:55"
+	if !isLocallyAdministeredMAC(mac) {
+		t.Fatal("locally administered MAC was not recognized")
+	}
+	if vendor := identifyVendor("family-iphone.local.", mac); vendor != "" {
+		t.Fatalf("random MAC received vendor %q", vendor)
+	}
+	result := identifyDevice("family-iphone.local.", mac, nil)
+	if len(result.Evidence) < 2 {
+		t.Fatalf("random MAC explanation missing: %+v", result)
 	}
 }
 

@@ -7,6 +7,21 @@ openDetail = function (id) {
   const device = devices.find(item => item.id === id);
   const deviceConnections = connections.filter(item => (item.TargetID || item.target_device_id) === id);
   const editTitle = [...document.querySelectorAll('#detail h3')].find(item => item.textContent === '编辑');
+  const detailTerms = [...document.querySelectorAll('#detail .detail-grid dt')];
+  const sourceTerm = detailTerms.find(item => item.textContent === '识别依据');
+  const sourceLabels = {hostname: '主机名', ports: '开放端口', mdns: 'mDNS 服务', ssdp: 'SSDP/UPnP', dhcp: 'DHCP', mac: 'MAC 厂商'};
+  if (sourceTerm && device?.identification_source) {
+    const sources = device.identification_source.split('+').map(source => sourceLabels[source] || source);
+    sourceTerm.nextElementSibling.textContent = `${sources.join(' + ')} · ${Math.round((device.identification_confidence || 0) * 100)}%`;
+  }
+  if (editTitle && device?.identification_evidence?.length) {
+    editTitle.insertAdjacentHTML('beforebegin', `
+      <section class="identification-card">
+        <h3>为什么这样识别</h3>
+        <ul>${device.identification_evidence.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
+        <small>自动识别仅供参考，你手工设置的类型始终优先。</small>
+      </section>`);
+  }
   if (editTitle) {
     editTitle.insertAdjacentHTML('beforebegin', `
       <section class="history-card">

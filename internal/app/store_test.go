@@ -26,7 +26,7 @@ func TestManualFieldsSurviveScan(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	d, e = s.upsertSeen(Discovery{IP: "192.168.7.20", MAC: "aa:bb:cc:dd:ee:ff", Hostname: "changed", Type: "linux", Latency: 3, ProbeMethod: "icmp", OpenPorts: []int{22}, TypeSource: "ports", TypeConfidence: .45})
+	d, e = s.upsertSeen(Discovery{IP: "192.168.7.20", MAC: "aa:bb:cc:dd:ee:ff", Hostname: "changed", Type: "linux", Latency: 3, ProbeMethod: "icmp", OpenPorts: []int{22}, TypeSource: "ports", TypeConfidence: .45, TypeEvidence: []string{"开放端口：22（SSH，弱线索） → linux"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -35,6 +35,9 @@ func TestManualFieldsSurviveScan(t *testing.T) {
 	}
 	if d.AutoType != "linux" || d.ProbeMethod != "icmp" || len(d.OpenPorts) != 1 || d.OpenPorts[0] != 22 || d.TypeSource != "ports" || d.TypeConfidence != .45 {
 		t.Fatalf("discovery metadata missing: %+v", d)
+	}
+	if len(d.TypeEvidence) != 1 {
+		t.Fatalf("identification evidence missing: %+v", d)
 	}
 	d, e = s.upsertSeen(Discovery{IP: "192.168.7.20", MAC: "aa:bb:cc:dd:ee:ff", Hostname: "changed", Type: "unknown", Latency: 4, ProbeMethod: "icmp", TypeConfidence: 0})
 	if e != nil {

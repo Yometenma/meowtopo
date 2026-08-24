@@ -125,8 +125,8 @@ func (s *Scanner) run(nets []*net.IPNet) {
 					seen[ip] = true
 					seenMu.Unlock()
 					host := lookupDeviceName(ip, sourceIP)
-					typ, source, confidence := identifyType(host, result.OpenPorts)
-					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host), Type: typ, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: source, TypeConfidence: confidence})
+					identification := identifyDevice(host, mac, result.OpenPorts)
+					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host, mac), Type: identification.DeviceType, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
 					s.events.Emit("device_seen", d)
 				}
 				s.mu.Lock()
@@ -168,8 +168,8 @@ sendLoop:
 		}
 		seen[ip] = true
 		host := lookupDeviceName(ip, sourceIP)
-		typ, source, confidence := identifyType(host, nil)
-		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host), Type: typ, ProbeMethod: "arp", TypeSource: source, TypeConfidence: confidence})
+		identification := identifyDevice(host, mac, nil)
+		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host, mac), Type: identification.DeviceType, ProbeMethod: "arp", TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
 		if err != nil {
 			continue
 		}
@@ -412,97 +412,4 @@ func parseARPLine(line, ip string) string {
 		return ""
 	}
 	return mac
-}
-func identifyType(host string, ports []int) (string, string, float64) {
-	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	hostRules := []struct {
-		kind       string
-		confidence float64
-		words      []string
-	}{
-		{"nas", .92, []string{"synology", "diskstation", "qnap", "truenas", "openmediavault", "asustor", "-nas", "nas-"}},
-		{"ap", .89, []string{"access-point", "wireless-ap", "unifi-ap", "uap-", "omada-ap"}},
-		{"router", .9, []string{"openwrt", "opnsense", "pfsense", "router", "gateway"}},
-		{"switch", .89, []string{"switch", "tl-sg", "tl-sl", "-sw-", "sw-core", "core-sw"}},
-		{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr"}},
-		{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet"}},
-		{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly", "tuya", "tasmota", "xiaomi", "yeelight", "aqara", "hue-bridge"}},
-		{"linux", .78, []string{"proxmox", "pve", "esxi", "server", "ubuntu", "debian", "raspberrypi", "raspberry-pi"}},
-		{"windows", .76, []string{"desktop-", "laptop-", "win-pc", "surface"}},
-		{"macos", .76, []string{"macbook", "imac", "mac-mini"}},
-		{"tablet", .76, []string{"ipad", "tablet"}},
-		{"phone", .72, []string{"iphone", "android", "pixel", "phone", "galaxy", "huawei", "oneplus"}},
-		{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast", "firetv", "roku"}},
-		{"game", .74, []string{"playstation", "xbox", "nintendo", "steamdeck"}},
-	}
-	for _, rule := range hostRules {
-		for _, word := range rule.words {
-			if strings.Contains(host, word) {
-				return rule.kind, "hostname", rule.confidence
-			}
-		}
-	}
-	open := map[int]bool{}
-	for _, port := range ports {
-		open[port] = true
-	}
-	switch {
-	case open[8123]:
-		return "iot", "ports", .78
-	case open[9100] || (open[631] && (open[80] || open[443])):
-		return "printer", "ports", .82
-	case open[62078]:
-		return "phone", "ports", .76
-	case open[554]:
-		return "camera", "ports", .72
-	case open[5357]:
-		return "windows", "ports", .7
-	case open[548]:
-		return "macos", "ports", .7
-	case open[631]:
-		return "printer", "ports", .68
-	case open[8008]:
-		return "tv", "ports", .66
-	case open[5000] && (open[445] || open[22]):
-		return "nas", "ports", .72
-	case open[3389]:
-		return "windows", "ports", .68
-	case open[32400]:
-		return "linux", "ports", .5
-	case open[53] && (open[80] || open[443]):
-		return "router", "ports", .6
-	case open[22]:
-		return "linux", "ports", .45
-	default:
-		return "unknown", "", 0
-	}
-}
-
-func identifyVendor(host string) string {
-	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	rules := []struct {
-		name  string
-		words []string
-	}{
-		{"Synology", []string{"synology", "diskstation"}},
-		{"QNAP", []string{"qnap"}},
-		{"TrueNAS", []string{"truenas"}},
-		{"ASUSTOR", []string{"asustor"}},
-		{"TP-Link", []string{"tp-link", "tplink", "tl-sg", "tl-sl", "deco"}},
-		{"Ubiquiti", []string{"ubiquiti", "unifi", "uap-"}},
-		{"Xiaomi", []string{"xiaomi", "miwifi", "yeelight", "aqara"}},
-		{"Apple", []string{"iphone", "ipad", "macbook", "imac", "mac-mini", "appletv", "homepod"}},
-		{"Google", []string{"chromecast", "google-home", "nest-"}},
-		{"Amazon", []string{"firetv", "echo-"}},
-		{"Samsung", []string{"samsung", "galaxy"}},
-		{"Raspberry Pi", []string{"raspberrypi", "raspberry-pi"}},
-	}
-	for _, rule := range rules {
-		for _, word := range rule.words {
-			if strings.Contains(host, word) {
-				return rule.name
-			}
-		}
-	}
-	return ""
 }
