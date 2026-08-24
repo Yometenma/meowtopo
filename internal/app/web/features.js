@@ -529,13 +529,30 @@ renderManager = function () {
     const id = +(actions?.querySelector('[data-id]')?.dataset.id || 0);
     const device = devices.find(item => item.id === id);
     if (!actions || !device) return;
+    row.dataset.status = device.status || 'unknown';
     if (device.is_important) row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge attention">长期在线</span>');
     if (device.presence_mode === 'occasional') row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge occasional">偶尔在线</span>');
     if (device.is_flapping) row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge unstable">状态不稳定</span>');
-    actions.insertAdjacentHTML('afterbegin', `<button data-action="attention" data-id="${id}">${device.is_important ? '取消长期在线' : '设为长期在线'}</button>`);
-    actions.querySelector('[data-action="attention"]').onclick = event => managerAction(event.currentTarget);
+    if (can(permission.edit)) {
+      actions.insertAdjacentHTML('afterbegin', `<button data-action="attention" data-id="${id}">${device.is_important ? '取消长期在线' : '设为长期在线'}</button>`);
+      actions.querySelector('[data-action="attention"]').onclick = event => managerAction(event.currentTarget);
+      const extraActions = [...actions.querySelectorAll('button:not([data-action="edit"])')];
+      if (extraActions.length) {
+        const menu = document.createElement('details');
+        menu.className = 'manager-actions-menu';
+        menu.innerHTML = '<summary aria-label="更多设备操作">更多</summary><div></div>';
+        extraActions.forEach(button => menu.querySelector('div').appendChild(button));
+        actions.appendChild(menu);
+        menu.addEventListener('toggle', () => {
+          if (!menu.open) return;
+          document.querySelectorAll('.manager-actions-menu[open]').forEach(other => {
+            if (other !== menu) other.removeAttribute('open');
+          });
+        });
+      }
+    }
     row.onclick = event => {
-      if (event.target.closest('button,input,label')) return;
+      if (event.target.closest('button,input,label,details,summary')) return;
       document.querySelector('#managerDialog').close();
       openDetail(id);
     };
