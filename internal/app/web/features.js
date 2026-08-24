@@ -225,7 +225,8 @@ function shellIcon(name) {
     activity: '<path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
     layout: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="m7.7 7.1 3.2 8.8m5.4-8.8-3.2 8.8M8 6h8"/>',
-    fit: '<path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/>'
+    fit: '<path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/>',
+    select: '<path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4"/><path d="M9 9h6v6H9z"/>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
 }
@@ -273,12 +274,14 @@ function ensureDashboardChrome() {
   layout.innerHTML = `${shellIcon('layout')}<span>整理布局</span>`;
   fit.innerHTML = `${shellIcon('fit')}<span>适应画布</span>`;
   toolbar.append(layout, fit);
+  toolbar.insertAdjacentHTML('afterbegin', `<button type="button" id="mobileSelectBtn" class="mobile-select-button${can(permission.edit) ? '' : ' hidden'}" title="选择多个设备">${shellIcon('select')}<span>选择</span></button>`);
   main.querySelector('#canvasPage').insertAdjacentHTML('beforeend', `<div id="selectionBar" class="selection-bar hidden"><b><span id="selectionCount">0</span> 台已选</b><button type="button" data-align="horizontal">横向对齐</button><button type="button" data-align="vertical">纵向对齐</button><button type="button" id="clearSelectionBtn">取消选择</button></div>`);
   document.querySelector('.legend')?.insertAdjacentHTML('beforeend', '<span class="muted selection-hint">Shift + 拖动框选</span>');
   updateDashboardHealth();
 }
 
 let quickLinkSource = null;
+let mobileSelectionMode = false;
 
 function closeTopologyMenu() {
   document.querySelector('#topologyMenu')?.remove();
@@ -290,6 +293,12 @@ function updateSelectionBar() {
   if (!bar) return;
   document.querySelector('#selectionCount').textContent = count;
   bar.classList.toggle('hidden', count < 2);
+}
+
+function setMobileSelectionMode(enabled) {
+  mobileSelectionMode = enabled && can(permission.edit);
+  document.querySelector('#mobileSelectBtn')?.classList.toggle('active', mobileSelectionMode);
+  if (mobileSelectionMode) toast('逐个点选设备，再拖动任一已选设备即可整组移动');
 }
 
 function alignSelectedNodes(axis) {
@@ -432,7 +441,13 @@ initCy = function () {
   cy.selectionType('additive');
   cy.style().selector('node.link-source').style({'border-width': 5, 'border-color': '#df9a3d', 'underlay-color': '#df9a3d', 'underlay-opacity': .2, 'underlay-padding': 12}).update();
   cy.off('tap', 'node');
-  cy.on('tap', 'node', event => openDetail(+event.target.id()));
+  cy.on('tap', 'node', event => {
+    if (mobileSelectionMode) {
+      event.target.selected() ? event.target.unselect() : event.target.select();
+      return;
+    }
+    openDetail(+event.target.id());
+  });
   cy.off('dragfree', 'node');
   cy.on('dragfree', 'node', event => {
     const moved = event.target.selected() ? cy.nodes(':selected') : event.target;
@@ -536,7 +551,8 @@ bind = function () {
   ensureQualityTools();
   originalBind();
   ensureDashboardChrome();
-  document.querySelector('#clearSelectionBtn').onclick = () => cy?.nodes().unselect();
+  document.querySelector('#mobileSelectBtn').onclick = () => setMobileSelectionMode(!mobileSelectionMode);
+  document.querySelector('#clearSelectionBtn').onclick = () => { cy?.nodes().unselect(); setMobileSelectionMode(false); };
   document.querySelectorAll('#selectionBar [data-align]').forEach(button => button.onclick = () => alignSelectedNodes(button.dataset.align));
   document.addEventListener('keydown', event => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
@@ -545,6 +561,7 @@ bind = function () {
       quickLinkSource = null;
       cy?.nodes().removeClass('link-source');
       cy?.nodes().unselect();
+      setMobileSelectionMode(false);
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && cy && can(permission.edit)) {
       event.preventDefault();
