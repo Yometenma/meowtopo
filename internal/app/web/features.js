@@ -439,7 +439,19 @@ initCy = function () {
   if (!cy) return;
   cy.boxSelectionEnabled(false);
   cy.selectionType('additive');
-  cy.style().selector('node.link-source').style({'border-width': 5, 'border-color': '#df9a3d', 'underlay-color': '#df9a3d', 'underlay-opacity': .2, 'underlay-padding': 12}).update();
+  cy.style()
+    .selector('node:selected').style({
+      'border-width': 6,
+      'border-color': '#35c98a',
+      'border-opacity': 1,
+      'underlay-color': '#35c98a',
+      'underlay-opacity': .34,
+      'underlay-padding': 15,
+      'opacity': 1,
+      'z-index': 20
+    })
+    .selector('node.link-source').style({'border-width': 6, 'border-color': '#df9a3d', 'underlay-color': '#df9a3d', 'underlay-opacity': .3, 'underlay-padding': 15, 'opacity': 1, 'z-index': 21})
+    .update();
   cy.off('tap', 'node');
   cy.on('tap', 'node', event => {
     if (mobileSelectionMode) {
