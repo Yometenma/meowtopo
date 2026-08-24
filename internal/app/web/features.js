@@ -636,6 +636,7 @@ bind = function () {
     document.title = `${title} · MeowTopo 喵拓`;
     document.body.dataset.workspace = workspace;
     document.body.classList.toggle('workspace-open', workspace !== 'overview');
+    document.querySelector('#accountBtn')?.classList.toggle('active', workspace === 'account');
   };
   navPages.forEach(([open, close]) => {
     if (open) {
@@ -684,6 +685,30 @@ bind = function () {
   }
   document.querySelector('#managerClose').textContent = '返回拓扑';
   document.querySelector('#accountClose').textContent = '返回拓扑';
+  const pageDialogs = [
+    ['managerDialog', '设备管理'],
+    ['activityDialog', '运行记录'],
+    ['settingsDialog', '系统设置'],
+    ['accountDialog', '账户管理']
+  ];
+  pageDialogs.forEach(([id, label]) => {
+    const dialog = document.querySelector(`#${id}`);
+    const heading = dialog?.querySelector('h2');
+    if (!dialog || !heading) return;
+    heading.id ||= `${id}Title`;
+    dialog.setAttribute('aria-labelledby', heading.id);
+    dialog.setAttribute('aria-label', label);
+  });
+  document.querySelectorAll('#settingsDialog .tabs, #activityDialog .activity-tabs').forEach(tablist => {
+    tablist.setAttribute('role', 'tablist');
+    tablist.querySelectorAll('button').forEach(button => {
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', String(button.classList.contains('active')));
+      button.addEventListener('click', () => {
+        tablist.querySelectorAll('button').forEach(item => item.setAttribute('aria-selected', String(item === button)));
+      });
+    });
+  });
   document.querySelectorAll('[data-activity-pane]').forEach(button => button.onclick = () => {
     document.querySelectorAll('[data-activity-pane]').forEach(item => item.classList.toggle('active', item === button));
     document.querySelectorAll('[data-activity-content]').forEach(pane => pane.classList.toggle('hidden', pane.dataset.activityContent !== button.dataset.activityPane));
