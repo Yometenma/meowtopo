@@ -39,7 +39,17 @@ MeowTopo 是一个面向家庭网络和 Homelab 的局域网设备监控工具�
 
 ## 快速开始
 
-### 需要准备
+MeowTopo 是一个由浏览器访问的家庭网络服务，不需要给每台电脑和手机分别安装客户端。请选择适合自己的运行方式：
+
+| 使用场景 | 推荐方式 | 支持平台 |
+|---|---|---|
+| NAS、服务器或小主机长期运行 | Docker | Linux AMD64 / ARM64 |
+| 在自己的电脑上直接体验 | 下载正式版 | Windows、macOS、Linux（AMD64 / ARM64） |
+| 参与开发或体验尚未发布的改动 | 从源码运行 | 安装了 Go 的 Windows、macOS、Linux |
+
+### 方式一：Docker（推荐用于长期运行）
+
+#### 需要准备
 
 - 一台长期在线、连接到待监控局域网的 **Linux** 服务器、NAS 或小主机
 - Docker Engine、Docker Compose 插件和 Git
@@ -58,7 +68,7 @@ docker compose version
 
 容器首次启动时会自动处理 `./data` 目录权限，然后以固定的非管理员用户运行 MeowTopo，不需要手动执行 `chown`。如果数据目录位于不允许容器修改权限的 NFS 或特殊 NAS 共享中，请先在宿主机上将该目录设置为 UID/GID `10001:10001` 可写。
 
-### 启动
+#### 启动
 
 ```bash
 git clone https://github.com/Yometenma/meowtopo.git
@@ -87,7 +97,7 @@ http://192.168.1.10:8088
 
 请填写自己网络的真实范围，不要直接照抄示例。
 
-### 查看状态与更新
+#### 查看状态与更新
 
 ```bash
 docker compose ps
@@ -103,7 +113,7 @@ docker compose up -d --build
 
 升级前建议先在“设置 → 备份与恢复”中下载备份。
 
-正式版本会提供 Windows、Linux 的 AMD64/ARM64 单文件程序和校验文件；容器镜像发布到 GitHub Container Registry。下载地址见 [GitHub Releases](https://github.com/Yometenma/meowtopo/releases)。
+正式版本会提供 Windows、macOS、Linux 的 AMD64/ARM64 压缩包和校验文件；容器镜像发布到 GitHub Container Registry。下载地址见 [GitHub Releases](https://github.com/Yometenma/meowtopo/releases)。
 
 ### 使用正式版容器镜像
 
@@ -125,13 +135,49 @@ docker run -d \
 
 然后打开 `http://服务器IP:8088`。升级正式版前先下载备份，再拉取新标签并重新创建容器。希望始终跟随最新正式版时，也可以使用 `ghcr.io/yometenma/meowtopo:latest`。
 
-## 为什么推荐 Linux + Host 网络
+### 方式二：直接运行下载版
+
+在 [GitHub Releases](https://github.com/Yometenma/meowtopo/releases) 下载与设备对应的压缩包：
+
+| 设备 | 下载文件 |
+|---|---|
+| 常见的 Intel / AMD Windows 电脑 | `meowtopo-windows-amd64.zip` |
+| Windows ARM 电脑 | `meowtopo-windows-arm64.zip` |
+| Intel Mac | `meowtopo-macos-amd64.tar.gz` |
+| Apple 芯片 Mac（M1 及以后） | `meowtopo-macos-arm64.tar.gz` |
+| 常见的 Intel / AMD Linux 设备 | `meowtopo-linux-amd64.tar.gz` |
+| ARM64 Linux、树莓派或 ARM NAS | `meowtopo-linux-arm64.tar.gz` |
+
+解压后，在该目录打开终端。Windows PowerShell：
+
+```powershell
+New-Item -ItemType Directory data -Force
+$env:MEOWTOPO_DATA_DIR="$PWD\data"
+$env:MEOWTOPO_HTTP_ADDR="0.0.0.0:8088"
+.\meowtopo.exe
+```
+
+Linux 或 macOS：
+
+```bash
+mkdir -p data
+chmod +x meowtopo
+MEOWTOPO_DATA_DIR=./data MEOWTOPO_HTTP_ADDR=0.0.0.0:8088 ./meowtopo
+```
+
+同一台设备访问 `http://127.0.0.1:8088`，家中其他设备访问 `http://运行喵拓的设备IP:8088`。Windows 首次询问防火墙权限时，只允许受信任的专用网络。
+
+macOS 下载版目前没有 Apple 签名和公证，系统可能在首次启动时拦截它；请在“系统设置 → 隐私与安全性”中确认只放行从本项目 Releases 下载的文件。
+
+关闭终端后程序也会停止。需要全天运行时，建议使用 Docker，或将下载版配置为系统服务。
+
+## 为什么长期运行仍推荐 Linux + Host 网络
 
 局域网发现需要观察宿主机所在的真实网络。项目的 Compose 使用 Host 网络并授予原始网络探测权限，这最适合原生 Linux。
 
-Docker Desktop、虚拟机、访客 Wi-Fi、VLAN 和防火墙都可能隔离广播或邻居信息，导致只能发现部分设备。推荐 Ubuntu、Debian、Fedora、Rocky Linux、OpenMediaVault、Unraid，以及能够正常运行 Docker Host 网络的 NAS。群晖等设备可能需要根据系统版本额外调整容器权限。
+这不代表只能在 Linux 上使用。Windows 和 macOS 下载版可以直接观察本机所在的局域网；但 Docker Desktop、虚拟机、访客 Wi-Fi、VLAN 和防火墙都可能隔离广播或邻居信息，导致只能发现部分设备。长期运行时推荐 Ubuntu、Debian、Fedora、Rocky Linux、OpenMediaVault、Unraid，以及能够正常运行 Docker Host 网络的 NAS。群晖等设备可能需要根据系统版本额外调整容器权限。
 
-## 不使用 Docker
+## 从源码运行
 
 需要 Go 1.23 或更高版本：
 

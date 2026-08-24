@@ -27,6 +27,10 @@ jobs:
           node --check internal/app/web/features.js
       - name: Build single binary
         run: go build -trimpath -ldflags="-s -w" -o meowtopo ./cmd/meowtopo
+      - name: Verify release targets
+        run: |
+          for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64; do
+            GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 go build -trimpath -o "/tmp/meowtopo-${target%/*}-${target#*/}" ./cmd/meowtopo
+          done
       - name: Validate Compose
         run: docker compose config --quiet
-

@@ -13,18 +13,36 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: linux
+          - goos: linux
+            label: linux
             arch: amd64
             ext: ''
-          - os: linux
+            archive: tar.gz
+          - goos: linux
+            label: linux
             arch: arm64
             ext: ''
-          - os: windows
+            archive: tar.gz
+          - goos: windows
+            label: windows
             arch: amd64
             ext: .exe
-          - os: windows
+            archive: zip
+          - goos: windows
+            label: windows
             arch: arm64
             ext: .exe
+            archive: zip
+          - goos: darwin
+            label: macos
+            arch: amd64
+            ext: ''
+            archive: tar.gz
+          - goos: darwin
+            label: macos
+            arch: arm64
+            ext: ''
+            archive: tar.gz
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -34,16 +52,25 @@ jobs:
           cache: true
       - name: Build
         env:
-          GOOS: ${{ matrix.os }}
+          GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: '0'
         run: |
-          mkdir -p dist
-          go build -trimpath -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o "dist/meowtopo-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}" ./cmd/meowtopo
+          package="meowtopo-${{ matrix.label }}-${{ matrix.arch }}"
+          mkdir -p "dist/${package}"
+          go build -trimpath -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o "dist/${package}/meowtopo${{ matrix.ext }}" ./cmd/meowtopo
+          cp README.md LICENSE ASSETS_LICENSE.md "dist/${package}/"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd dist && zip -r "${package}.zip" "${package}")
+          else
+            tar -C dist -czf "dist/${package}.tar.gz" "${package}"
+          fi
       - uses: actions/upload-artifact@v7
         with:
-          name: meowtopo-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/*
+          name: meowtopo-${{ matrix.label }}-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
           if-no-files-found: error
 
   github-release:
@@ -55,7 +82,7 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Create checksums
-        run: cd dist && sha256sum meowtopo-* > SHA256SUMS.txt
+        run: cd dist && sha256sum *.zip *.tar.gz > SHA256SUMS.txt
       - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
