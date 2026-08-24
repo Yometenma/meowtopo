@@ -58,6 +58,23 @@ func TestTrimStatusEventsKeepsNewest(t *testing.T) {
 	}
 }
 
+func TestDeviceExportSupportsCSVAndJSON(t *testing.T) {
+	s := testServer(t)
+	if _, err := s.store.upsertSeen(Discovery{IP: "192.168.77.20", MAC: "aa:bb:cc:dd:ee:20", Hostname: "living-room-tv.local", Type: "tv"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []struct{ url, contentType, contains string }{
+		{"/api/devices/export?format=csv", "text/csv", "living-room-tv.local"},
+		{"/api/devices/export?format=json", "application/json", `"current_ip":"192.168.77.20"`},
+	} {
+		recorder := httptest.NewRecorder()
+		s.exportDevices(recorder, httptest.NewRequest(http.MethodGet, target.url, nil))
+		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Header().Get("Content-Type"), target.contentType) || !strings.Contains(recorder.Body.String(), target.contains) {
+			t.Fatalf("export %s status=%d type=%s body=%s", target.url, recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
+		}
+	}
+}
+
 func testServer(t *testing.T) *Server {
 	t.Helper()
 	store := testStore(t)

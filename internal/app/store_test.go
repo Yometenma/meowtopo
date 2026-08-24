@@ -175,7 +175,7 @@ func TestLegacyDeviceTableMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	want := map[string]bool{"probe_method": false, "open_ports": false, "identification_source": false, "identification_confidence": false, "is_important": false}
+	want := map[string]bool{"probe_method": false, "open_ports": false, "identification_source": false, "identification_confidence": false, "is_important": false, "presence_mode": false}
 	for rows.Next() {
 		var cid, notNull, primaryKey int
 		var name, kind string
@@ -191,5 +191,52 @@ func TestLegacyDeviceTableMigration(t *testing.T) {
 		if !found {
 			t.Errorf("migration did not add %s", name)
 		}
+	}
+}
+
+func TestOccasionalDeviceWaitsLongerBeforeOffline(t *testing.T) {
+	s := testStore(t)
+	d, err := s.upsertSeen(Discovery{IP: "192.168.44.20", Type: "phone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(`UPDATE devices SET presence_mode='occasional' WHERE id=?`, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 11; i++ {
+		if err = s.markMisses(map[string]bool{}, 3); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, _ = s.device(d.ID)
+	if d.Status == "offline" {
+		t.Fatal("occasional device went offline too early")
+	}
+	if err = s.markMisses(map[string]bool{}, 3); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = s.device(d.ID)
+	if d.Status != "offline" {
+		t.Fatalf("status=%s", d.Status)
+	}
+}
+
+func TestDeviceReportsRecentStatusInstability(t *testing.T) {
+	s := testStore(t)
+	d, err := s.upsertSeen(Discovery{IP: "192.168.55.8", Type: "phone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err = s.db.Exec(`INSERT INTO status_events(device_id,event_type,old_status,new_status,created_at) VALUES(?,'status','online','offline',?)`, d.ID, now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, err = s.device(d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Flapping || d.StatusChanges != 3 {
+		t.Fatalf("instability not reported: %+v", d)
 	}
 }

@@ -91,3 +91,5 @@ html.dark .dashboard-shell .canvas-page{box-shadow:0 18px 55px #0004,inset 0 1px
   .dashboard-shell #settingsDialog>form{min-height:auto;padding-bottom:24px}
   .dashboard-shell .nav-button:not(.active):hover{color:var(--muted);background:transparent;box-shadow:none}
 }
+
+.connection-help{display:block;margin-top:.45rem;color:var(--muted);line-height:1.55}.device-warning{padding:.7rem .8rem;border-radius:.75rem;background:rgba(221,166,71,.12);color:#b57919}.scan-diagnostics{padding:1rem;border:1px solid var(--line);border-radius:1rem;background:var(--panel-soft)}.scan-diagnostics p{margin:.2rem 0 .65rem}.scan-diagnostics ul{margin:.5rem 0;padding-left:1.25rem}.scan-diagnostics li{margin:.35rem 0}.diagnostic-ok{color:var(--mint)}.export-actions{display:flex;align-items:center;gap:.55rem;margin-top:.8rem}.badge.occasional{background:rgba(102,163,218,.16);color:#6aa4d7}.badge.unstable{background:rgba(221,166,71,.16);color:#c58b2f}

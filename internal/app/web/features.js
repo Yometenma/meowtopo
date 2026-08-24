@@ -5,6 +5,7 @@ nodeDisplay = device => `${device.is_important ? '★ ' : ''}${originalNodeDispl
 openDetail = function (id) {
   originalOpenDetail(id);
   const device = devices.find(item => item.id === id);
+  const connection = connections.find(item => (item.TargetID || item.target_device_id) === id);
   const editTitle = [...document.querySelectorAll('#detail h3')].find(item => item.textContent === '编辑');
   if (editTitle) {
     editTitle.insertAdjacentHTML('beforebegin', `
@@ -18,15 +19,27 @@ openDetail = function (id) {
   }
   const actions = document.querySelector('#detail .drawer-actions');
   if (actions) {
-    actions.insertAdjacentHTML('beforebegin', `<section class="attention-setting"><label class="check"><input id="editImportant" type="checkbox" ${device?.is_important ? 'checked' : ''}>设为长期在线设备</label><small>适合路由器、NAS、服务器等通常不会关机的设备；它们离线时才会提醒你。</small></section>`);
+    actions.insertAdjacentHTML('beforebegin', `<section class="attention-setting"><label>设备在线方式<select id="editPresence"><option value="normal" ${device?.presence_mode !== 'occasional' ? 'selected' : ''}>普通设备</option><option value="occasional" ${device?.presence_mode === 'occasional' ? 'selected' : ''}>偶尔在线（手机、平板、游戏机等）</option></select><small>偶尔在线设备休眠后会等待更久再判定离线，减少状态反复。</small></label><label class="check"><input id="editImportant" type="checkbox" ${device?.is_important ? 'checked' : ''}>设为长期在线设备</label><small>适合路由器、NAS、服务器等通常不会关机的设备；只有这类设备离线时才会提醒你。</small>${device?.is_flapping ? '<p class="device-warning">这台设备最近一小时状态变化较频繁，喵拓已暂缓重复提醒。</p>' : ''}</section>`);
+  }
+  const connectionSelect = document.querySelector('#editConn');
+  if (connectionSelect) {
+    connectionSelect.insertAdjacentHTML('afterend', '<small id="connectionHelp" class="connection-help"></small>');
+    const explain = () => {
+      const descriptions = {unknown: '未知连接：还没有足够信息判断连接方式。', ethernet: '网线：表示设备通过有线网络连接；除非来源是设备协议，否则不代表已确认具体交换机端口。', wifi: 'Wi-Fi：表示设备通过无线网络连接；不一定能确认具体接入点。', logical: '逻辑连接：只用于整理设备归属，不代表真实网线、无线接入点或交换机端口。', virtual: '虚拟连接：用于 Internet、虚拟机、容器或其他没有对应实体网线的关系。'};
+      const source = connection?.user_confirmed || connection?.Confirmed ? '这条关系由用户确认。' : connection ? '这条关系由系统推测。' : '保存后会作为用户确认的关系。';
+      document.querySelector('#connectionHelp').textContent = `${descriptions[connectionSelect.value]} ${source}`;
+    };
+    connectionSelect.onchange = explain;
+    explain();
   }
 };
 
 const originalSaveDetail = saveDetail;
 saveDetail = async function (device) {
   const important = document.querySelector('#editImportant')?.checked || false;
+  const presenceMode = document.querySelector('#editPresence')?.value || 'normal';
   try {
-    await api(`/api/devices/${device.id}`, {method: 'PATCH', body: JSON.stringify({is_important: important})});
+    await api(`/api/devices/${device.id}`, {method: 'PATCH', body: JSON.stringify({is_important: important, presence_mode: presenceMode})});
   } catch (error) {
     toast(error.message);
     return;
@@ -99,6 +112,7 @@ openSettings = async function () {
   document.querySelector('#historyRetentionDays').value = settings.history_retention_days || 30;
   loadMaintenanceStatus();
   document.querySelector('#setCIDR').placeholder = '多个网段用逗号分隔，例如 192.168.1.0/24,10.0.0.0/24';
+  loadScanDiagnostics();
 };
 
 function ensureMaintenanceUI() {
@@ -124,6 +138,31 @@ function ensureMaintenanceUI() {
       loadMaintenanceStatus();
     } catch (error) { result.textContent = error.message; }
   };
+}
+
+function ensureQualityTools() {
+  const settingsMain = document.querySelector('#settingsMain');
+  if (settingsMain && !document.querySelector('#scanDiagnostics')) {
+    settingsMain.insertAdjacentHTML('beforeend', `<section class="settings-group quality-tools"><div class="settings-group-title"><b>扫描情况</b><small>了解为什么有些设备可能没有被发现</small></div><div id="scanDiagnostics" class="scan-diagnostics">打开设置后会读取最近一次扫描情况。</div><button type="button" id="refreshDiagnostics">重新检查</button></section>`);
+    document.querySelector('#refreshDiagnostics').onclick = loadScanDiagnostics;
+  }
+  const toolbar = document.querySelector('#managerDialog .manager-toolbar');
+  if (toolbar && !document.querySelector('#deviceExport')) {
+    toolbar.insertAdjacentHTML('beforeend', `<div id="deviceExport" class="export-actions"><span>导出设备清单</span><a class="button" href="/api/devices/export?format=csv">CSV</a><a class="button" href="/api/devices/export?format=json">JSON</a></div>`);
+  }
+}
+
+async function loadScanDiagnostics() {
+  const target = document.querySelector('#scanDiagnostics');
+  if (!target) return;
+  target.textContent = '正在检查…';
+  try {
+    const data = await api('/api/scan/diagnostics');
+    const latest = data.latest || {};
+    const summary = latest.total_addresses ? `最近扫描 ${latest.scanned_addresses}/${latest.total_addresses} 个地址，发现 ${latest.found_devices} 台设备。` : '还没有扫描记录。';
+    const warnings = data.warnings?.length ? `<ul>${data.warnings.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '<p class="diagnostic-ok">没有发现明显的扫描环境问题。</p>';
+    target.innerHTML = `<p><b>${esc(summary)}</b></p><p>网段：${esc(data.configured_cidrs || '未设置')} · 网卡：${esc(data.interface || '自动选择')}</p>${warnings}`;
+  } catch (error) { target.textContent = error.message; }
 }
 
 function shellIcon(name) {
@@ -224,6 +263,8 @@ renderManager = function () {
     const device = devices.find(item => item.id === id);
     if (!actions || !device) return;
     if (device.is_important) row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge attention">长期在线</span>');
+    if (device.presence_mode === 'occasional') row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge occasional">偶尔在线</span>');
+    if (device.is_flapping) row.querySelector('.manager-device-main b')?.insertAdjacentHTML('beforeend', '<span class="badge unstable">状态不稳定</span>');
     actions.insertAdjacentHTML('afterbegin', `<button data-action="attention" data-id="${id}">${device.is_important ? '取消长期在线' : '设为长期在线'}</button>`);
     actions.querySelector('[data-action="attention"]').onclick = event => managerAction(event.currentTarget);
     row.onclick = event => {
@@ -269,6 +310,7 @@ async function loadMaintenanceStatus() {
 const originalBind = bind;
 bind = function () {
   ensureMaintenanceUI();
+  ensureQualityTools();
   originalBind();
   ensureDashboardChrome();
   document.querySelector('#aboutTab').onclick = async () => {

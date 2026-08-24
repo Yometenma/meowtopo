@@ -71,13 +71,14 @@ func (n *Notifier) NotifyScan(startedAt string, status ScanStatus) {
 			rows.Close()
 		}
 	}
-	rows, err := n.store.db.Query(`SELECT e.device_id,COALESCE(NULLIF(d.user_name,''),NULLIF(d.auto_hostname,''),NULLIF(d.current_ip,''),'已删除设备'),d.current_ip,e.new_status,COALESCE(d.is_important,0) FROM status_events e LEFT JOIN devices d ON d.id=e.device_id WHERE e.created_at>=? ORDER BY e.id`, startedAt)
+	rows, err := n.store.db.Query(`SELECT e.device_id,COALESCE(NULLIF(d.user_name,''),NULLIF(d.auto_hostname,''),NULLIF(d.current_ip,''),'已删除设备'),d.current_ip,e.new_status,COALESCE(d.is_important,0),(SELECT COUNT(*) FROM status_events recent WHERE recent.device_id=e.device_id AND recent.event_type='status' AND strftime('%s',recent.created_at)>=strftime('%s','now','-1 hour')) FROM status_events e LEFT JOIN devices d ON d.id=e.device_id WHERE e.created_at>=? ORDER BY e.id`, startedAt)
 	if err == nil {
 		for rows.Next() {
 			var deviceID int64
 			var name, ip, newStatus string
 			var important bool
-			if rows.Scan(&deviceID, &name, &ip, &newStatus, &important) != nil || !important {
+			var changes int
+			if rows.Scan(&deviceID, &name, &ip, &newStatus, &important, &changes) != nil || !important || changes >= 3 {
 				continue
 			}
 			if newStatus == "online" && settingEnabled(settings, "notification_online", true) && n.allowNotification(deviceID, "online", cooldown) {

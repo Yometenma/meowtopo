@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -103,6 +104,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("GET /api/network/interfaces", s.require(PermManageSettings, func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, detectNetwork(s.cfg.DataDir).Interfaces) }))
 	m.Handle("GET /api/network/detection", s.require(PermManageSettings, func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, detectNetwork(s.cfg.DataDir)) }))
 	m.Handle("GET /api/devices", s.require(PermView, s.listDevices))
+	m.Handle("GET /api/devices/export", s.require(PermView, s.exportDevices))
 	m.Handle("POST /api/devices", s.require(PermEditDevices, s.createDevice))
 	m.Handle("POST /api/devices/batch", s.require(PermEditDevices, s.batchDevices))
 	m.Handle("GET /api/devices/{id}", s.require(PermView, s.getDevice))
@@ -119,6 +121,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("POST /api/scan", s.require(PermRunScans, s.startScan))
 	m.Handle("GET /api/scan/status", s.require(PermView, func(w http.ResponseWriter, r *http.Request) { jsonOut(w, 200, s.scanner.Status()) }))
 	m.Handle("GET /api/scan/history", s.require(PermView, s.scanHistory))
+	m.Handle("GET /api/scan/diagnostics", s.require(PermView, s.scanDiagnostics))
 	m.Handle("GET /api/status/events", s.require(PermView, s.statusEvents))
 	m.Handle("GET /api/settings", s.require(PermManageSettings, s.getSettings))
 	m.Handle("PATCH /api/settings", s.require(PermManageSettings, s.patchSettings))
@@ -286,14 +289,15 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v struct {
-		UserName   *string `json:"user_name"`
-		UserType   *string `json:"user_device_type"`
-		Icon       *string `json:"icon"`
-		Notes      *string `json:"notes"`
-		IsNew      *bool   `json:"is_new"`
-		IsIgnored  *bool   `json:"is_ignored"`
-		AlwaysShow *bool   `json:"always_show"`
-		Important  *bool   `json:"is_important"`
+		UserName     *string `json:"user_name"`
+		UserType     *string `json:"user_device_type"`
+		Icon         *string `json:"icon"`
+		Notes        *string `json:"notes"`
+		IsNew        *bool   `json:"is_new"`
+		IsIgnored    *bool   `json:"is_ignored"`
+		AlwaysShow   *bool   `json:"always_show"`
+		Important    *bool   `json:"is_important"`
+		PresenceMode *string `json:"presence_mode"`
 	}
 	if e = decode(r, &v); e != nil {
 		fail(w, 400, "invalid_request", e.Error())
@@ -333,6 +337,15 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 		sets = append(sets, "is_important=?")
 		args = append(args, *v.Important)
 	}
+	if v.PresenceMode != nil {
+		mode := strings.ToLower(strings.TrimSpace(*v.PresenceMode))
+		if mode != "normal" && mode != "occasional" {
+			fail(w, 400, "invalid_presence_mode", "设备在线方式无效")
+			return
+		}
+		sets = append(sets, "presence_mode=?")
+		args = append(args, mode)
+	}
 	args = append(args, id)
 	if _, e = s.store.db.Exec(`UPDATE devices SET `+strings.Join(sets, ",")+` WHERE id=?`, args...); e != nil {
 		fail(w, 500, "database_error", e.Error())
@@ -345,6 +358,44 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	s.events.Emit("device_updated", d)
 	jsonOut(w, 200, d)
+}
+
+func (s *Server) exportDevices(w http.ResponseWriter, r *http.Request) {
+	devices, err := s.store.devices()
+	if err != nil {
+		fail(w, 500, "database_error", err.Error())
+		return
+	}
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format == "json" {
+		w.Header().Set("Content-Disposition", `attachment; filename="meowtopo-devices.json"`)
+		jsonOut(w, 200, devices)
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="meowtopo-devices.csv"`)
+	_, _ = w.Write([]byte{0xef, 0xbb, 0xbf})
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"名称", "IP", "MAC", "类型", "状态", "在线方式", "主机名", "首次发现", "最后在线", "备注"})
+	for _, d := range devices {
+		name := d.UserName
+		if name == "" {
+			name = d.AutoHostname
+		}
+		if name == "" {
+			name = d.IP
+		}
+		typ := d.UserType
+		if typ == "" {
+			typ = d.AutoType
+		}
+		mode := d.PresenceMode
+		if d.Important {
+			mode = "always_online"
+		}
+		_ = writer.Write([]string{name, d.IP, d.MAC, typ, d.Status, mode, d.AutoHostname, d.FirstSeen, d.LastSeen, d.Notes})
+	}
+	writer.Flush()
 }
 func (s *Server) deleteDevice(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
@@ -584,6 +635,32 @@ func (s *Server) scanHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOut(w, 200, out)
+}
+
+func (s *Server) scanDiagnostics(w http.ResponseWriter, r *http.Request) {
+	detection := detectNetwork(s.cfg.DataDir)
+	settings, _ := s.store.settings()
+	latest := struct {
+		FinishedAt string `json:"finished_at"`
+		Status     string `json:"status"`
+		CIDRs      string `json:"cidrs"`
+		Total      int    `json:"total_addresses"`
+		Scanned    int    `json:"scanned_addresses"`
+		Found      int    `json:"found_devices"`
+		Error      string `json:"error_summary"`
+	}{}
+	_ = s.store.db.QueryRow(`SELECT finished_at,status,cidrs,total_addresses,scanned_addresses,found_devices,error_summary FROM scan_runs ORDER BY id DESC LIMIT 1`).Scan(&latest.FinishedAt, &latest.Status, &latest.CIDRs, &latest.Total, &latest.Scanned, &latest.Found, &latest.Error)
+	warnings := append([]string{}, detection.Warnings...)
+	if latest.Total > 0 && latest.Found <= 2 {
+		warnings = append(warnings, "发现的设备很少，请确认服务器与家庭设备处在同一局域网，并检查访客网络、VLAN 或 Docker 网络隔离。")
+	}
+	if latest.Total > 0 && latest.Scanned < latest.Total {
+		warnings = append(warnings, "最近一次扫描没有检查完全部地址。")
+	}
+	if strings.TrimSpace(settings["scan_interface"]) == "" {
+		warnings = append(warnings, "当前自动选择网卡；多网卡或 VPN 环境建议明确选择连接家庭网络的网卡。")
+	}
+	jsonOut(w, 200, map[string]any{"latest": latest, "interface": settings["scan_interface"], "configured_cidrs": settings["scan_cidrs"], "docker_likely": detection.DockerLikely, "raw_probe_available": detection.RawProbeAvailable, "warnings": warnings})
 }
 func (s *Server) statusEvents(w http.ResponseWriter, r *http.Request) {
 	limit := 100

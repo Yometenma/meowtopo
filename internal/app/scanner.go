@@ -115,6 +115,7 @@ func (s *Scanner) run(nets []*net.IPNet) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			sourceIP, _ := interfaceIPv4(cfg.Interface)
 			for ip := range jobs {
 				result := probeTarget(ctx, ip, cfg)
 				mac := arpMAC(ip)
@@ -126,6 +127,9 @@ func (s *Scanner) run(nets []*net.IPNet) {
 					host := ""
 					if names, _ := net.LookupAddr(ip); len(names) > 0 {
 						host = names[0]
+					}
+					if host == "" {
+						host = lookupMDNSName(ip, sourceIP, 300*time.Millisecond)
 					}
 					typ, source, confidence := identifyType(host, result.OpenPorts)
 					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Type: typ, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: source, TypeConfidence: confidence})

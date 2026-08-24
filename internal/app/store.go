@@ -49,6 +49,9 @@ type Device struct {
 	IsIgnored      bool    `json:"is_ignored"`
 	AlwaysShow     bool    `json:"always_show"`
 	Important      bool    `json:"is_important"`
+	PresenceMode   string  `json:"presence_mode"`
+	StatusChanges  int     `json:"status_changes_hour"`
+	Flapping       bool    `json:"is_flapping"`
 	Manual         bool    `json:"created_manually"`
 	CreatedAt      string  `json:"created_at"`
 	UpdatedAt      string  `json:"updated_at"`
@@ -107,6 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX I
 		"identification_source":     "TEXT NOT NULL DEFAULT ''",
 		"identification_confidence": "REAL NOT NULL DEFAULT 0",
 		"is_important":              "INTEGER NOT NULL DEFAULT 0",
+		"presence_mode":             "TEXT NOT NULL DEFAULT 'normal'",
 	} {
 		if err := s.ensureDeviceColumn(name, definition); err != nil {
 			return err
@@ -145,9 +149,9 @@ func (s *Store) ensureDeviceColumn(name, definition string) error {
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 func scanDevice(rows interface{ Scan(...any) error }) (Device, error) {
 	var d Device
-	var n, h, ig, a, important, m, l int
+	var n, h, ig, a, important, m, l, flapping int
 	var openPorts string
-	err := rows.Scan(&d.ID, &d.StableKey, &d.MAC, &d.IP, &d.AutoHostname, &d.UserName, &d.Vendor, &d.AutoType, &d.UserType, &d.Icon, &d.Notes, &d.FirstSeen, &d.LastSeen, &d.LastChecked, &d.Status, &d.Latency, &d.ProbeMethod, &openPorts, &d.TypeSource, &d.TypeConfidence, &d.Successes, &d.Failures, &n, &h, &ig, &a, &important, &m, &d.CreatedAt, &d.UpdatedAt, &d.X, &d.Y, &l)
+	err := rows.Scan(&d.ID, &d.StableKey, &d.MAC, &d.IP, &d.AutoHostname, &d.UserName, &d.Vendor, &d.AutoType, &d.UserType, &d.Icon, &d.Notes, &d.FirstSeen, &d.LastSeen, &d.LastChecked, &d.Status, &d.Latency, &d.ProbeMethod, &openPorts, &d.TypeSource, &d.TypeConfidence, &d.Successes, &d.Failures, &n, &h, &ig, &a, &important, &d.PresenceMode, &m, &d.CreatedAt, &d.UpdatedAt, &d.X, &d.Y, &l, &d.StatusChanges, &flapping)
 	if err == nil {
 		_ = json.Unmarshal([]byte(openPorts), &d.OpenPorts)
 	}
@@ -156,12 +160,16 @@ func scanDevice(rows interface{ Scan(...any) error }) (Device, error) {
 	d.IsIgnored = ig != 0
 	d.AlwaysShow = a != 0
 	d.Important = important != 0
+	if d.PresenceMode == "" {
+		d.PresenceMode = "normal"
+	}
+	d.Flapping = flapping != 0
 	d.Manual = m != 0
 	d.Locked = l != 0
 	return d, err
 }
 
-const deviceSelect = `SELECT d.id,d.stable_key,d.mac_address,d.current_ip,d.auto_hostname,d.user_name,d.vendor,d.auto_device_type,d.user_device_type,d.icon,d.notes,d.first_seen_at,d.last_seen_at,d.last_checked_at,d.status,d.ping_latency_ms,d.probe_method,d.open_ports,d.identification_source,d.identification_confidence,d.consecutive_successes,d.consecutive_failures,d.is_new,d.is_hidden,d.is_ignored,d.always_show,d.is_important,d.created_manually,d.created_at,d.updated_at,COALESCE(p.x,0),COALESCE(p.y,0),COALESCE(p.locked,0) FROM devices d LEFT JOIN node_positions p ON p.device_id=d.id`
+const deviceSelect = `SELECT d.id,d.stable_key,d.mac_address,d.current_ip,d.auto_hostname,d.user_name,d.vendor,d.auto_device_type,d.user_device_type,d.icon,d.notes,d.first_seen_at,d.last_seen_at,d.last_checked_at,d.status,d.ping_latency_ms,d.probe_method,d.open_ports,d.identification_source,d.identification_confidence,d.consecutive_successes,d.consecutive_failures,d.is_new,d.is_hidden,d.is_ignored,d.always_show,d.is_important,d.presence_mode,d.created_manually,d.created_at,d.updated_at,COALESCE(p.x,0),COALESCE(p.y,0),COALESCE(p.locked,0),(SELECT COUNT(*) FROM status_events e WHERE e.device_id=d.id AND e.event_type='status' AND strftime('%s',e.created_at)>=strftime('%s','now','-1 hour')),CASE WHEN (SELECT COUNT(*) FROM status_events e WHERE e.device_id=d.id AND e.event_type='status' AND strftime('%s',e.created_at)>=strftime('%s','now','-1 hour'))>=3 THEN 1 ELSE 0 END FROM devices d LEFT JOIN node_positions p ON p.device_id=d.id`
 
 func (s *Store) devices() (out []Device, err error) {
 	r, err := s.db.Query(deviceSelect + ` ORDER BY d.id`)
@@ -242,8 +250,15 @@ func (s *Store) markMisses(seen map[string]bool, threshold int) error {
 			continue
 		}
 		f := d.Failures + 1
+		deviceThreshold := threshold
+		if d.PresenceMode == "occasional" {
+			deviceThreshold = threshold * 4
+			if deviceThreshold < 12 {
+				deviceThreshold = 12
+			}
+		}
 		status := "suspected_offline"
-		if f >= threshold {
+		if f >= deviceThreshold {
 			status = "offline"
 		}
 		if d.Status == "unknown" && f == 1 {
@@ -408,7 +423,8 @@ func mergeDeviceRecords(tx *sql.Tx, keepID, removeID int64) error {
 		is_hidden=MAX(is_hidden,(SELECT is_hidden FROM devices WHERE id=?)),
 		is_ignored=MAX(is_ignored,(SELECT is_ignored FROM devices WHERE id=?)),
 		always_show=MAX(always_show,(SELECT always_show FROM devices WHERE id=?)),
-		is_important=MAX(is_important,(SELECT is_important FROM devices WHERE id=?)) WHERE id=?`, removeID, removeID, removeID, removeID, removeID, removeID, removeID, keepID); err != nil {
+		is_important=MAX(is_important,(SELECT is_important FROM devices WHERE id=?)),
+		presence_mode=CASE WHEN presence_mode='normal' THEN (SELECT presence_mode FROM devices WHERE id=?) ELSE presence_mode END WHERE id=?`, removeID, removeID, removeID, removeID, removeID, removeID, removeID, removeID, keepID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO device_addresses(device_id,address,first_seen_at,last_seen_at) SELECT ?,address,first_seen_at,last_seen_at FROM device_addresses WHERE device_id=?`, keepID, removeID); err != nil {
