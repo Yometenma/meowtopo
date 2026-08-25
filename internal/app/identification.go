@@ -28,20 +28,20 @@ type hostnameRule struct {
 }
 
 var deviceHostnameRules = []hostnameRule{
-	{"nas", .92, []string{"synology", "diskstation", "qnap", "truenas", "openmediavault", "asustor", "-nas", "nas-"}},
-	{"ap", .89, []string{"access-point", "wireless-ap", "unifi-ap", "uap-", "omada-ap"}},
-	{"router", .9, []string{"openwrt", "opnsense", "pfsense", "router", "gateway"}},
+	{"nas", .92, []string{"synology", "diskstation", "qnap", "truenas", "openmediavault", "asustor", "terramaster", "terra-master", "ugreen", "unraid", "freenas", "-nas", "nas-"}},
+	{"ap", .89, []string{"access-point", "wireless-ap", "unifi-ap", "uap-", "omada-ap", "deco-"}},
+	{"router", .9, []string{"openwrt", "opnsense", "pfsense", "router", "gateway", "tp-link", "tplink", "rt-ax", "rt-ac", "miwifi", "mikrotik", "edgerouter"}},
 	{"switch", .89, []string{"switch", "tl-sg", "tl-sl", "-sw-", "sw-core", "core-sw"}},
-	{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr"}},
-	{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet"}},
-	{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly", "tuya", "tasmota", "xiaomi", "yeelight", "aqara", "hue-bridge"}},
+	{"camera", .88, []string{"ipcam", "camera", "webcam", "nvr", "dvr", "hikvision", "dahua", "reolink", "wyze", "ezviz", "arlo", "blink", "nest-cam"}},
+	{"printer", .86, []string{"printer", "laserjet", "deskjet", "officejet", "pixma"}},
+	{"iot", .84, []string{"homeassistant", "home-assistant", "esphome", "shelly", "tuya", "tasmota", "xiaomi", "yeelight", "aqara", "hue-bridge", "sonoff", "smartthings", "wemo", "echo-", "echo-dot", "google-home", "homepod", "nest-"}},
 	{"linux", .78, []string{"proxmox", "pve", "esxi", "server", "ubuntu", "debian", "raspberrypi", "raspberry-pi"}},
 	{"windows", .76, []string{"desktop-", "laptop-", "win-pc", "surface"}},
-	{"macos", .76, []string{"macbook", "imac", "mac-mini"}},
+	{"macos", .76, []string{"macbook", "imac", "mac-mini", "mac-pro", "macstudio"}},
 	{"tablet", .76, []string{"ipad", "tablet"}},
-	{"phone", .72, []string{"iphone", "android", "pixel", "phone", "galaxy", "huawei", "oneplus"}},
-	{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast", "firetv", "roku"}},
-	{"game", .74, []string{"playstation", "xbox", "nintendo", "steamdeck"}},
+	{"phone", .72, []string{"iphone", "android", "pixel", "phone", "galaxy", "huawei", "oneplus", "redmi", "realme", "oppo", "vivo", "honor", "poco", "motorola"}},
+	{"tv", .7, []string{"smarttv", "androidtv", "appletv", "chromecast", "firetv", "roku", "tcl", "hisense", "haier", "skyworth", "bravia", "shield"}},
+	{"game", .74, []string{"playstation", "xbox", "nintendo", "steamdeck", "ps5", "ps4"}},
 }
 
 func identifyDevice(host, mac string, ports []int, extra ...identificationEvidence) identificationResult {

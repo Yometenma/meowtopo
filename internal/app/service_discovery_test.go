@@ -12,6 +12,13 @@ func TestMDNSServiceEvidence(t *testing.T) {
 		{"_ipp._tcp.local", "printer"},
 		{"_googlecast._tcp.local", "tv"},
 		{"_hap._tcp.local", "iot"},
+		{"_smb._tcp.local", "nas"},
+		{"_nfs._tcp.local", "nas"},
+		{"_afpovertcp._tcp.local", "nas"},
+		{"_amzn-wplay._tcp.local", "iot"},
+		{"_appletv-v2._tcp.local", "tv"},
+		{"_adb._tcp.local", "phone"},
+		{"_ssh._tcp.local", "linux"},
 	}
 	for _, test := range tests {
 		evidence, ok := mdnsServiceEvidence(test.service, "living-room.local")
@@ -54,5 +61,39 @@ func TestServiceEvidenceJoinsIdentification(t *testing.T) {
 	result := identifyDevice("living-room", "00:11:22:33:44:55", []int{8008}, extra)
 	if result.DeviceType != "tv" || result.Source != "ports+ssdp" || result.Confidence <= .9 {
 		t.Fatalf("service evidence was not combined: %+v", result)
+	}
+}
+
+func TestMDNSInstanceName(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"客厅的电视._googlecast._tcp.local", "客厅的电视"},
+		{"my-nas.local", "my-nas"},
+		{"Living Room Apple TV._airplay._tcp.local", "Living Room Apple TV"},
+		{"_googlecast._tcp.local", ""},
+	}
+	for _, test := range tests {
+		if got := mdnsInstanceName(test.input); got != test.want {
+			t.Errorf("mdnsInstanceName(%q) = %q, want %q", test.input, got, test.want)
+		}
+	}
+}
+
+func TestExpandedHostnameRules(t *testing.T) {
+	tests := []struct {
+		host, want string
+	}{
+		{"redmi-note-10", "phone"},
+		{"tcl-65-inch", "tv"},
+		{"hikvision-nvr", "camera"},
+		{"terramaster-f4", "nas"},
+		{"miwifi-r4a", "router"},
+		{"echo-dot-3", "iot"},
+	}
+	for _, test := range tests {
+		if got := identifyDevice(test.host, "", nil).DeviceType; got != test.want {
+			t.Errorf("identifyDevice(%q) = %q, want %q", test.host, got, test.want)
+		}
 	}
 }

@@ -9,13 +9,13 @@ type vendorIdentificationRule struct {
 }
 
 var deviceVendorRules = []vendorIdentificationRule{
-	{"nas", .72, []string{"synology", "qnap", "asustor", "ixsystems", "truenas"}},
-	{"camera", .68, []string{"hikvision", "dahua", "axis communications", "reolink"}},
+	{"nas", .72, []string{"synology", "qnap", "asustor", "ixsystems", "truenas", "terramaster"}},
+	{"camera", .68, []string{"hikvision", "dahua", "axis communications", "reolink", "arlo", "wyze", "eufy", "ring", "ezviz"}},
 	{"printer", .62, []string{"brother industries", "xerox", "lexmark", "kyocera document"}},
 	{"linux", .58, []string{"raspberry pi"}},
 	{"iot", .62, []string{"espressif", "tuya", "shelly", "signify", "philips lighting"}},
 	{"game", .62, []string{"nintendo"}},
-	{"tv", .58, []string{"roku"}},
+	{"tv", .58, []string{"roku", "sonos"}},
 }
 
 // Vendor-only rules are limited to manufacturers whose products strongly

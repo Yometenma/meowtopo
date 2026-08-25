@@ -110,7 +110,7 @@ func (s *Scanner) run(nets []*net.IPNet) {
 	var seenMu sync.Mutex
 	var wg sync.WaitGroup
 	sourceIP, _ := interfaceIPv4(cfg.Interface)
-	serviceEvidence := discoverServiceEvidence(ctx, sourceIP, 1200*time.Millisecond)
+	serviceEvidence, serviceHostnames := discoverServiceEvidence(ctx, sourceIP, 1200*time.Millisecond)
 	learnedRules, _ := s.store.learnedVendorRules()
 	workers := cfg.Concurrency
 	if workers > s.Status().Total {
@@ -129,6 +129,9 @@ func (s *Scanner) run(nets []*net.IPNet) {
 					seen[ip] = true
 					seenMu.Unlock()
 					host := lookupDeviceName(ip, sourceIP)
+					if host == "" {
+						host = serviceHostnames[ip]
+					}
 					vendor := s.vendorFor(host, mac)
 					identification := identifyDevice(host, mac, result.OpenPorts, identificationEvidenceFor(vendor, learnedRules, serviceEvidence[ip])...)
 					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: vendor, Type: identification.DeviceType, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
@@ -172,6 +175,9 @@ sendLoop:
 		}
 		seen[ip] = true
 		host := lookupDeviceName(ip, sourceIP)
+		if host == "" {
+			host = serviceHostnames[ip]
+		}
 		vendor := s.vendorFor(host, mac)
 		identification := identifyDevice(host, mac, nil, identificationEvidenceFor(vendor, learnedRules, serviceEvidence[ip])...)
 		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: vendor, Type: identification.DeviceType, ProbeMethod: "arp", TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
