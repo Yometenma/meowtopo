@@ -121,6 +121,28 @@ func TestMakeSNMPV3Client(t *testing.T) {
 	}
 }
 
+func TestLLDPRemoteIndexParsing(t *testing.T) {
+	// Column 5 is lldpRemChassisId; the index is timeMark.localPortNum.remoteIndex.
+	index, port, ok := lldpRemoteIndex(".1.0.8802.1.1.2.1.4.1.1.5.0.2.1", 5)
+	if !ok || index != "0.2.1" || port != 2 {
+		t.Fatalf("chassis index=%q port=%d ok=%v", index, port, ok)
+	}
+	// The port-description column (8) must group under the same index.
+	index, port, ok = lldpRemoteIndex(".1.0.8802.1.1.2.1.4.1.1.8.0.2.1", 8)
+	if !ok || index != "0.2.1" || port != 2 {
+		t.Fatalf("port-desc index=%q port=%d ok=%v", index, port, ok)
+	}
+	if _, _, ok := lldpRemoteIndex(".1.0.8802.1.1.2.1.4.1.1.9.0.2.1", 5); ok {
+		t.Fatal("wrong column accepted")
+	}
+	if _, _, ok := lldpRemoteIndex(".1.2.3", 5); ok {
+		t.Fatal("truncated OID accepted")
+	}
+	if _, _, ok := lldpRemoteIndex("not-an-oid", 5); ok {
+		t.Fatal("non-numeric OID accepted")
+	}
+}
+
 type assertError string
 
 func (e assertError) Error() string { return string(e) }

@@ -291,16 +291,17 @@ func readLLDPNeighbors(client *gosnmp.GoSNMP) ([]lldpNeighbor, error) {
 	}
 	neighbors := map[string]*lldpNeighbor{}
 	for _, table := range tables {
+		column, ok := oidLastInt(table.oid)
+		if !ok {
+			return nil, fmt.Errorf("invalid LLDP column OID %q", table.oid)
+		}
 		err := walkSNMP(client, table.oid, func(pdu gosnmp.SnmpPDU) error {
-			root := strings.TrimPrefix(table.oid, ".") + "."
-			index := strings.TrimPrefix(strings.TrimPrefix(pdu.Name, "."), root)
-			parts := strings.Split(index, ".")
-			if len(parts) < 3 {
+			index, localPort, ok := lldpRemoteIndex(pdu.Name, column)
+			if !ok {
 				return nil
 			}
 			neighbor := neighbors[index]
 			if neighbor == nil {
-				localPort, _ := strconv.Atoi(parts[len(parts)-2])
 				neighbor = &lldpNeighbor{LocalPort: localPort}
 				neighbors[index] = neighbor
 			}
@@ -367,6 +368,36 @@ func oidLastInt(oid string) (int, bool) {
 	parts := strings.Split(oid, ".")
 	value, err := strconv.Atoi(parts[len(parts)-1])
 	return value, err == nil
+}
+
+func oidToInts(oid string) ([]int, bool) {
+	oid = strings.TrimPrefix(oid, ".")
+	if oid == "" {
+		return nil, false
+	}
+	parts := strings.Split(oid, ".")
+	nums := make([]int, 0, len(parts))
+	for _, part := range parts {
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, false
+		}
+		nums = append(nums, n)
+	}
+	return nums, true
+}
+
+// lldpRemoteIndex parses the three-component LLDP-MIB remote table index
+// (timeMark . localPortNum . remoteIndex) that follows the column number in a
+// walked OID. It returns the grouping key for the remote neighbor and the
+// local port the neighbor was learned from.
+func lldpRemoteIndex(oid string, column int) (index string, localPort int, ok bool) {
+	nums, valid := oidToInts(oid)
+	if !valid || len(nums) < 4 || nums[len(nums)-4] != column {
+		return "", 0, false
+	}
+	timeMark, localPortNum, remoteIndex := nums[len(nums)-3], nums[len(nums)-2], nums[len(nums)-1]
+	return fmt.Sprintf("%d.%d.%d", timeMark, localPortNum, remoteIndex), localPortNum, true
 }
 
 func cleanSNMPText(value []byte) string {
