@@ -167,7 +167,10 @@ func combineIdentificationEvidence(evidence []identificationEvidence) identifica
 	labels := make([]string, 0, len(evidence))
 	for _, item := range evidence {
 		sourceSet[item.Kind] = true
-		prefix := map[string]string{"hostname": "主机名", "ports": "开放端口"}[item.Kind]
+		prefix := map[string]string{"hostname": "主机名", "ports": "开放端口", "vendor": "MAC 厂商", "local_corrections": "本地修正"}[item.Kind]
+		if prefix == "" {
+			prefix = "识别线索"
+		}
 		labels = append(labels, fmt.Sprintf("%s：%s → %s", prefix, item.Value, deviceTypeName(item.DeviceType)))
 	}
 	sources := make([]string, 0, len(sourceSet))

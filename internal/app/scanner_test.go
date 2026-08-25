@@ -113,6 +113,27 @@ func TestIdentificationConflictReducesConfidence(t *testing.T) {
 	}
 }
 
+func TestVendorEvidenceIdentifiesOnlyFocusedManufacturers(t *testing.T) {
+	result := identifyDevice("", "00:11:22:33:44:55", nil, vendorEvidence("Synology Incorporated")...)
+	if result.DeviceType != "nas" || result.Source != "vendor" || result.Confidence != .72 {
+		t.Fatalf("unexpected vendor result: %+v", result)
+	}
+	for _, broad := range []string{"Apple, Inc.", "Samsung Electronics", "TP-Link Technologies", "Ubiquiti Inc."} {
+		if evidence := vendorEvidence(broad); len(evidence) != 0 {
+			t.Fatalf("broad vendor %q produced evidence: %+v", broad, evidence)
+		}
+	}
+}
+
+func TestLocalCorrectionEvidenceParticipatesInIdentification(t *testing.T) {
+	rules := map[string]learnedIdentificationRule{"example devices": {DeviceType: "iot", Count: 3, Total: 3}}
+	evidence := identificationEvidenceFor("Example Devices", rules, nil)
+	result := identifyDevice("", "00:11:22:33:44:55", nil, evidence...)
+	if result.DeviceType != "iot" || result.Source != "local_corrections" || len(result.Evidence) != 1 {
+		t.Fatalf("unexpected learned result: %+v", result)
+	}
+}
+
 func TestRandomMACDoesNotClaimHostnameVendor(t *testing.T) {
 	mac := "02:11:22:33:44:55"
 	if !isLocallyAdministeredMAC(mac) {

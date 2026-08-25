@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,upd
 CREATE TABLE IF NOT EXISTS status_events(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER,event_type TEXT,old_status TEXT,new_status TEXT,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS device_samples(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER NOT NULL,checked_at TEXT NOT NULL,status TEXT NOT NULL,latency_ms REAL NOT NULL DEFAULT 0,probe_method TEXT NOT NULL DEFAULT '',FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS notification_state(device_id INTEGER NOT NULL,event_type TEXT NOT NULL,last_sent_at TEXT NOT NULL,PRIMARY KEY(device_id,event_type),FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS identification_corrections(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER NOT NULL,automatic_type TEXT NOT NULL,corrected_type TEXT NOT NULL,evidence TEXT NOT NULL DEFAULT '[]',created_at TEXT NOT NULL,FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS identification_corrections(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER NOT NULL,automatic_type TEXT NOT NULL,corrected_type TEXT NOT NULL,vendor TEXT NOT NULL DEFAULT '',evidence TEXT NOT NULL DEFAULT '[]',created_at TEXT NOT NULL,FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE COLLATE NOCASE,display_name TEXT NOT NULL,password_hash TEXT NOT NULL,permissions INTEGER NOT NULL DEFAULT 1,is_admin INTEGER NOT NULL DEFAULT 0,is_active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_login_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,csrf_token TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,last_seen_at TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id); CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
@@ -119,11 +119,17 @@ CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX I
 			return err
 		}
 	}
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2),(3),(4),(5),(6)`)
+	if err := s.ensureTableColumn("identification_corrections", "vendor", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2),(3),(4),(5),(6),(7)`)
 	return err
 }
 func (s *Store) ensureDeviceColumn(name, definition string) error {
-	rows, err := s.db.Query(`PRAGMA table_info(devices)`)
+	return s.ensureTableColumn("devices", name, definition)
+}
+func (s *Store) ensureTableColumn(table, name, definition string) error {
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
 	if err != nil {
 		return err
 	}
@@ -146,7 +152,7 @@ func (s *Store) ensureDeviceColumn(name, definition string) error {
 	if found {
 		return nil
 	}
-	_, err = s.db.Exec(`ALTER TABLE devices ADD COLUMN ` + name + ` ` + definition)
+	_, err = s.db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + name + ` ` + definition)
 	return err
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
@@ -364,14 +370,15 @@ func (s *Store) createManual(name, typ, notes string) (Device, error) {
 	return s.device(id)
 }
 
-func (s *Store) recordIdentificationCorrection(deviceID int64, automaticType, correctedType string, evidence []string) error {
+func (s *Store) recordIdentificationCorrection(deviceID int64, automaticType, correctedType, vendor string, evidence []string) error {
 	if correctedType == "" || correctedType == automaticType {
 		return nil
 	}
 	encoded, _ := json.Marshal(evidence)
-	_, err := s.db.Exec(`INSERT INTO identification_corrections(device_id,automatic_type,corrected_type,evidence,created_at) VALUES(?,?,?,?,?)`, deviceID, automaticType, correctedType, string(encoded), now())
+	_, err := s.db.Exec(`INSERT INTO identification_corrections(device_id,automatic_type,corrected_type,vendor,evidence,created_at) VALUES(?,?,?,?,?,?)`, deviceID, automaticType, correctedType, vendor, string(encoded), now())
 	return err
 }
+
 func (s *Store) ensureCore(gateway string) error {
 	t := now()
 	tx, e := s.db.Begin()

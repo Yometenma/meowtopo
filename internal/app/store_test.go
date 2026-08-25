@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -97,7 +98,7 @@ func TestIdentificationCorrectionIsRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.recordIdentificationCorrection(d.ID, d.AutoType, "nas", d.TypeEvidence); err != nil {
+	if err = s.recordIdentificationCorrection(d.ID, d.AutoType, "nas", "Example Storage", d.TypeEvidence); err != nil {
 		t.Fatal(err)
 	}
 	var automaticType, correctedType, evidence string
@@ -106,6 +107,80 @@ func TestIdentificationCorrectionIsRecorded(t *testing.T) {
 	}
 	if automaticType != "linux" || correctedType != "nas" || !strings.Contains(evidence, "22") {
 		t.Fatalf("correction=%q/%q evidence=%q", automaticType, correctedType, evidence)
+	}
+}
+
+func TestLearnedVendorRulesRequireAgreementAcrossDevices(t *testing.T) {
+	s := testStore(t)
+	for index := 1; index <= 2; index++ {
+		d, err := s.upsertSeen(Discovery{IP: fmt.Sprintf("192.168.9.%d", index), MAC: fmt.Sprintf("00:11:22:33:44:%02x", index), Vendor: "Example Devices", Type: "unknown"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.recordIdentificationCorrection(d.ID, "unknown", "iot", d.Vendor, nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.db.Exec(`UPDATE devices SET user_device_type='iot' WHERE id=?`, d.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rules, err := s.learnedVendorRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule, ok := rules["example devices"]
+	if !ok || rule.DeviceType != "iot" || rule.Count != 2 || rule.Total != 2 {
+		t.Fatalf("unexpected learned rules: %+v", rules)
+	}
+	if _, err = s.db.Exec(`UPDATE devices SET user_device_type='' WHERE current_ip='192.168.9.1'`); err != nil {
+		t.Fatal(err)
+	}
+	rules, err = s.learnedVendorRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok = rules["example devices"]; ok {
+		t.Fatalf("inactive correction still trained a rule: %+v", rules)
+	}
+}
+
+func TestMigrationAddsVendorToExistingCorrectionTable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "meowtopo.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`CREATE TABLE identification_corrections(id INTEGER PRIMARY KEY,device_id INTEGER,automatic_type TEXT,corrected_type TEXT,evidence TEXT,created_at TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := openStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.db.Close()
+	var found int
+	rows, err := store.db.Query(`PRAGMA table_info(identification_corrections)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var column, kind string
+		var defaultValue any
+		if err = rows.Scan(&cid, &column, &kind, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		if column == "vendor" {
+			found++
+		}
+	}
+	if found != 1 {
+		t.Fatalf("vendor column count=%d", found)
 	}
 }
 

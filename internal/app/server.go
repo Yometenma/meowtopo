@@ -392,7 +392,7 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.UserType != nil && d.UserType != previous.UserType {
-		if e = s.store.recordIdentificationCorrection(id, d.AutoType, d.UserType, d.TypeEvidence); e != nil {
+		if e = s.store.recordIdentificationCorrection(id, d.AutoType, d.UserType, d.Vendor, d.TypeEvidence); e != nil {
 			fail(w, 500, "database_error", e.Error())
 			return
 		}
