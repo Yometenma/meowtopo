@@ -1,4 +1,18 @@
 const $ = (s) => document.querySelector(s);
+// Shared frontend state. These top-level `let` bindings are visible to every
+// deferred script (the browser loads them in the order listed in index.html),
+// so treat them as the single source of truth for the current view:
+//   cy               Cytoscape instance, created by initCy() in topology-core.js
+//   devices          fetched by refresh() from /api/topology
+//   connections      fetched together with devices
+//   settings         /api/settings result (permission-gated)
+//   saveTimers       debounce timers for canvas position saves
+//   selectedDevices  multi-select set in the device manager
+//   managerFiltered  filtered device rows shown in the manager
+//   currentAccount   logged-in user; set by authResult()
+//   csrfToken        CSRF token echoed by login/bootstrap/me
+// Also shared (declared where they are used): searchMatches/searchIndex in
+// app-bootstrap.js, quickLinkSource/mobileSelectionMode in topology-ui.js.
 let cy,
   devices = [],
   connections = [],

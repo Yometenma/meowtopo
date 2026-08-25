@@ -3,15 +3,10 @@ appExtensions.deviceLabel = (device) => (device.is_important ? "★ " : "");
 appExtensions.deviceDetail = function (id) {
   const device = devices.find((item) => item.id === id);
   const deviceConnections = connections.filter(
-    (item) => (item.TargetID || item.target_device_id) === id,
+    (item) => item.target_device_id === id,
   );
-  const editTitle = [...document.querySelectorAll("#detail h3")].find(
-    (item) => item.textContent === "编辑",
-  );
-  const detailTerms = [...document.querySelectorAll("#detail .detail-grid dt")];
-  const sourceTerm = detailTerms.find(
-    (item) => item.textContent === "识别依据",
-  );
+  const editTitle = document.querySelector("#editHeading");
+  const sourceTerm = document.querySelector("#identificationSource");
   const sourceLabels = {
     hostname: "主机名",
     ports: "开放端口",
@@ -24,7 +19,7 @@ appExtensions.deviceDetail = function (id) {
     const sources = device.identification_source
       .split("+")
       .map((source) => sourceLabels[source] || source);
-    sourceTerm.nextElementSibling.textContent = `${sources.join(" + ")} · ${Math.round((device.identification_confidence || 0) * 100)}%`;
+    sourceTerm.textContent = `${sources.join(" + ")} · ${Math.round((device.identification_confidence || 0) * 100)}%`;
   }
   if (editTitle && device?.identification_evidence?.length) {
     editTitle.insertAdjacentHTML(
@@ -82,22 +77,18 @@ appExtensions.deviceDetail = function (id) {
     }
     const connectionList = deviceConnections
       .map((connection) => {
-        const parentID = connection.SourceID || connection.source_device_id;
+        const parentID = connection.source_device_id;
         const parent = devices.find((item) => item.id === parentID);
-        const type = connection.Type || connection.connection_type || "unknown";
-        const port = connection.Port || connection.port_label || "";
-        const confirmed = connection.Confirmed ?? connection.user_confirmed;
+        const type = connection.connection_type || "unknown";
+        const port = connection.port_label || "";
+        const confirmed = connection.user_confirmed;
         const sourceType =
-          connection.SourceType ||
-          connection.source_type ||
-          (confirmed ? "manual" : "inferred");
-        const confidence = Number(
-          connection.Confidence ?? connection.confidence ?? 0,
-        );
+          connection.source_type || (confirmed ? "manual" : "inferred");
+        const confidence = Number(connection.confidence ?? 0);
         const evidence = confirmed
           ? "你确认的连接 · 高可信度"
           : `${connectionSourceLabel(sourceType)} · ${confidence ? `可信度 ${Math.round(confidence * 100)}%` : "可信度未知"}`;
-        return `<div class="connection-row"><div><b>${esc(parent ? nameOf(parent) : `设备 ${parentID}`)}</b><span>${esc(connectionTypeLabel(type))}${port ? ` · ${esc(port)}` : ""}</span><small>${esc(evidence)}</small></div><button type="button" data-remove-connection="${connection.ID || connection.id}">移除</button></div>`;
+        return `<div class="connection-row"><div><b>${esc(parent ? nameOf(parent) : `设备 ${parentID}`)}</b><span>${esc(connectionTypeLabel(type))}${port ? ` · ${esc(port)}` : ""}</span><small>${esc(evidence)}</small></div><button type="button" data-remove-connection="${connection.id}">移除</button></div>`;
       })
       .join("");
     parentSelect
@@ -185,29 +176,6 @@ appExtensions.saveDeviceDetail = async function (device) {
     toast(error.message);
   }
 };
-
-function connectionTypeLabel(type) {
-  return (
-    {
-      unknown: "未知连接",
-      ethernet: "网线",
-      wifi: "Wi-Fi",
-      logical: "逻辑连接",
-      virtual: "虚拟连接",
-    }[type] || "未知连接"
-  );
-}
-function connectionSourceLabel(source) {
-  return (
-    {
-      manual: "用户设置",
-      inferred: "系统低可信度推测",
-      lldp: "LLDP 发现",
-      snmp: "SNMP 发现",
-      controller: "网络控制器提供",
-    }[source] || "来源未知"
-  );
-}
 
 async function loadDeviceHistory(id, hours) {
   const summary = document.querySelector("#historySummary");

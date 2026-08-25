@@ -385,18 +385,18 @@ function elements() {
   const edges = connections
     .filter(
       (c) =>
-        ids.has(String(c.SourceID || c.source_device_id)) &&
-        ids.has(String(c.TargetID || c.target_device_id)),
+        ids.has(String(c.source_device_id)) &&
+        ids.has(String(c.target_device_id)),
     )
     .map((c) => ({
       data: {
-        id: `e${c.ID || c.id}`,
-        source: String(c.SourceID || c.source_device_id),
-        target: String(c.TargetID || c.target_device_id),
-        type: c.Type || c.connection_type,
-        sourceType: c.SourceType || c.source_type,
-        confidence: c.Confidence ?? c.confidence ?? 0,
-        confirmed: String(c.Confirmed ?? c.user_confirmed),
+        id: `e${c.id}`,
+        source: String(c.source_device_id),
+        target: String(c.target_device_id),
+        type: c.connection_type,
+        sourceType: c.source_type,
+        confidence: c.confidence ?? 0,
+        confirmed: String(c.user_confirmed),
       },
     }));
   return [...nodes, ...edges];
