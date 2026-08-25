@@ -15,7 +15,6 @@ function openManager() {
       .map((d) => `<option value="${d.id}">${esc(nameOf(d))}</option>`)
       .join("");
   renderManager();
-  $("#managerDialog").show();
   appExtensions.managerOpened();
 }
 function renderManager() {
@@ -52,7 +51,7 @@ function renderManager() {
     ? managerFiltered
         .map(
           (d) =>
-            `<div class="manager-device"><div class="manager-device-main"><input type="checkbox" data-select="${d.id}" aria-label="选择 ${attr(nameOf(d))}" ${selectedDevices.has(d.id) ? "checked" : ""}><div class="device-icon">${icons[typeOf(d)] || "?"}</div><div><b>${esc(nameOf(d))}${d.is_new ? '<span class="badge warn">新设备</span>' : ""}${d.is_hidden ? '<span class="badge">已隐藏</span>' : ""}</b><small>${esc(d.current_ip || "手工节点")} · ${typeLabel(typeOf(d))} · ${statusText(d.status)}</small></div></div><div class="manager-device-actions"><button data-action="edit" data-id="${d.id}">详情</button>${d.is_new ? `<button data-action="seen" data-id="${d.id}">取消新标记</button>` : ""}<button data-action="visibility" data-id="${d.id}">${d.is_hidden ? "恢复显示" : "隐藏"}</button></div></div>`,
+            `<div class="manager-device"><div class="manager-device-main"><input type="checkbox" data-select="${d.id}" aria-label="选择 ${attr(nameOf(d))}" ${selectedDevices.has(d.id) ? "checked" : ""}><div class="device-icon"><img src="${deviceArtwork(typeOf(d))}" alt="" loading="lazy"></div><div><b>${esc(nameOf(d))}${d.is_new ? '<span class="badge warn">新设备</span>' : ""}${d.is_hidden ? '<span class="badge">已隐藏</span>' : ""}</b><small>${esc(d.current_ip || "手工节点")} · ${typeLabel(typeOf(d))} · ${statusText(d.status)}</small></div></div><div class="manager-device-actions"><button data-action="edit" data-id="${d.id}">详情</button>${d.is_new ? `<button data-action="seen" data-id="${d.id}">取消新标记</button>` : ""}<button data-action="visibility" data-id="${d.id}">${d.is_hidden ? "恢复显示" : "隐藏"}</button></div></div>`,
         )
         .join("")
     : '<p class="muted">没有符合条件的设备。</p>';
@@ -75,7 +74,6 @@ async function managerAction(button) {
   const d = devices.find((x) => x.id === id);
   if (!d) return;
   if (button.dataset.action === "edit") {
-    $("#managerDialog").close();
     openDetail(id);
     return;
   }
@@ -124,7 +122,6 @@ async function runBatch(action) {
   }
 }
 async function openActivity() {
-  $("#activityDialog").show();
   await loadActivity();
 }
 async function loadActivity() {

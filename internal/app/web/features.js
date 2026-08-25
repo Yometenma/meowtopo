@@ -35,7 +35,7 @@ appExtensions.activityLoaded = function () {
 
 appExtensions.managerRendered = function () {
   document
-    .querySelector("#managerDialog .batch-bar")
+    .querySelector("#pageDevices .batch-bar")
     ?.classList.toggle("has-selection", selectedDevices.size > 0);
   document.querySelectorAll("#managerList .manager-device").forEach((row) => {
     const actions = row.querySelector(".manager-device-actions");
@@ -95,14 +95,13 @@ appExtensions.managerRendered = function () {
     }
     row.onclick = (event) => {
       if (event.target.closest("button,input,label,details,summary")) return;
-      document.querySelector("#managerDialog").close();
       openDetail(id);
     };
   });
 };
 
 appExtensions.managerOpened = function () {
-  document.querySelector("#managerDialog").scrollTop = 0;
+  document.querySelector("#pageDevices .page-scroll")?.scrollTo({ top: 0 });
 };
 
 appExtensions.managerAction = async function (button) {
@@ -194,7 +193,8 @@ appExtensions.bind = function () {
   ensureQualityTools();
   ensureVendorDatabaseUI();
   updateDashboardHealth();
-  document.querySelector("#homeBtn").onclick = () => cy?.fit(undefined, 60);
+  document.querySelector("#homeBtn").onclick = () =>
+    window.switchWorkspace?.("overview");
   document.querySelector("#canvasHelpClose").onclick = () =>
     document.querySelector("#canvasHelpDialog").close();
   document.querySelector("#mobileSelectBtn").onclick = () =>
@@ -251,108 +251,39 @@ appExtensions.bind = function () {
         ? "开发版 · 本地构建"
         : `版本 ${value}`;
   };
-  const overview = document.querySelector("#overviewNav");
   const workspaceMeta = {
-    overview: ["家庭网络中心", "网络拓扑"],
-    devices: ["设备与连接", "设备管理"],
-    activity: ["扫描与状态变化", "运行记录"],
-    settings: ["扫描、通知与数据", "系统设置"],
-    account: ["成员与访问权限", "账户管理"],
+    overview: ["~/topology", "网络拓扑"],
+    devices: ["~/devices", "设备管理"],
+    activity: ["~/activity", "运行记录"],
+    settings: ["~/settings", "系统设置"],
   };
-  const navPages = [
-    [
-      document.querySelector("#manageBtn"),
-      document.querySelector("#managerClose"),
-    ],
-    [
-      document.querySelector("#activityBtn"),
-      document.querySelector("#activityClose"),
-    ],
-    [
-      document.querySelector("#settingsBtn"),
-      document.querySelector('#settingsForm button[value="cancel"]'),
-    ],
-    [
-      document.querySelector("#accountBtn"),
-      document.querySelector("#accountClose"),
-    ],
-  ];
-  const workspaceDialogs = [
-    "managerDialog",
-    "activityDialog",
-    "settingsDialog",
-    "accountDialog",
-  ];
-  const closeWorkspacePages = () =>
-    workspaceDialogs.forEach((id) => {
-      const dialog = document.querySelector(`#${id}`);
-      if (dialog?.open) dialog.close();
+  window.switchWorkspace = (name) => {
+    if (!workspaceMeta[name]) name = "overview";
+    document.querySelectorAll(".dock-nav").forEach((button) => {
+      const active = button.dataset.workspace === name;
+      button.classList.toggle("active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
     });
-  const activateNav = (
-    button,
-    workspace = button?.dataset.workspace || "overview",
-  ) => {
-    document.querySelectorAll(".sidebar-nav .nav-button").forEach((item) => {
-      const active = item === button;
-      item.classList.toggle("active", active);
-      if (active) item.setAttribute("aria-current", "page");
-      else item.removeAttribute("aria-current");
-    });
-    const [eyebrow, title] = workspaceMeta[workspace] || workspaceMeta.overview;
-    document.querySelector("#pageEyebrow").textContent = eyebrow;
-    document.querySelector("#pageTitle").textContent = title;
+    document.querySelectorAll(".page").forEach((page) =>
+      page.classList.toggle("hidden", page.dataset.page !== name),
+    );
+    const [path, title] = workspaceMeta[name];
+    document.querySelector("#pagePath").textContent = path;
     document.title = `${title} · MeowTopo 喵拓`;
-    document.body.dataset.workspace = workspace;
-    document.body.classList.toggle("workspace-open", workspace !== "overview");
-    document
-      .querySelector("#accountBtn")
-      ?.classList.toggle("active", workspace === "account");
+    document.body.dataset.workspace = name;
+    if (name === "overview") cy?.fit(undefined, 60);
+    if (name === "devices") openManager();
+    if (name === "activity") openActivity();
+    if (name === "settings") openSettings();
   };
-  navPages.forEach(([open, close]) => {
-    if (open) {
-      const action = open.onclick;
-      open.onclick = async (event) => {
-        closeWorkspacePages();
-        activateNav(open, open.dataset.workspace);
-        const result = await action?.call(open, event);
-        if (
-          workspaceDialogs.some((id) => document.querySelector(`#${id}`)?.open)
-        )
-          activateNav(open, open.dataset.workspace);
-        return result;
-      };
-    }
-    if (close) {
-      const action = close.onclick;
-      close.onclick = (event) => {
-        activateNav(overview);
-        return action?.call(close, event);
-      };
-    }
+  document.querySelectorAll(".dock-nav").forEach((button) => {
+    button.onclick = () => window.switchWorkspace(button.dataset.workspace);
   });
-  workspaceDialogs.forEach((id) =>
-    document.querySelector(`#${id}`)?.addEventListener("close", () => {
-      setTimeout(() => {
-        if (
-          !workspaceDialogs.some(
-            (dialogID) => document.querySelector(`#${dialogID}`)?.open,
-          )
-        )
-          activateNav(overview);
-      }, 0);
-    }),
-  );
-  if (overview)
-    overview.onclick = () => {
-      closeWorkspacePages();
-      activateNav(overview);
-      cy?.fit(undefined, 60);
-    };
   document.querySelectorAll(".status-card").forEach((card) => {
     const openFilteredDevices = () => {
-      document.querySelector("#manageBtn").click();
       document.querySelector("#managerStatus").value = card.dataset.status;
-      renderManager();
+      window.switchWorkspace("devices");
     };
     card.onclick = openFilteredDevices;
     card.onkeydown = (event) => {
@@ -362,33 +293,14 @@ appExtensions.bind = function () {
       }
     };
   });
-  const accountButton = document.querySelector("#accountBtn");
-  if (accountButton) {
-    const action = accountButton.onclick;
-    accountButton.onclick = async (event) => {
-      closeWorkspacePages();
-      activateNav(null, "account");
-      return action?.call(accountButton, event);
-    };
+  const accountDialog = document.querySelector("#accountDialog");
+  const accountHeading = accountDialog?.querySelector("h2");
+  if (accountDialog && accountHeading) {
+    accountHeading.id ||= "accountDialogTitle";
+    accountDialog.setAttribute("aria-labelledby", accountHeading.id);
   }
-  document.querySelector("#managerClose").textContent = "返回拓扑";
-  document.querySelector("#accountClose").textContent = "返回拓扑";
-  const pageDialogs = [
-    ["managerDialog", "设备管理"],
-    ["activityDialog", "运行记录"],
-    ["settingsDialog", "系统设置"],
-    ["accountDialog", "账户管理"],
-  ];
-  pageDialogs.forEach(([id, label]) => {
-    const dialog = document.querySelector(`#${id}`);
-    const heading = dialog?.querySelector("h2");
-    if (!dialog || !heading) return;
-    heading.id ||= `${id}Title`;
-    dialog.setAttribute("aria-labelledby", heading.id);
-    dialog.setAttribute("aria-label", label);
-  });
   document
-    .querySelectorAll("#settingsDialog .tabs, #activityDialog .activity-tabs")
+    .querySelectorAll("#pageSettings .tabs, #pageActivity .activity-tabs")
     .forEach((tablist) => {
       tablist.setAttribute("role", "tablist");
       tablist.querySelectorAll("button").forEach((button) => {

@@ -2,6 +2,15 @@
 let searchMatches = [];
 let searchIndex = 0;
 
+function applyThemeMode() {
+  const manual = localStorage.theme;
+  const dark = manual
+    ? manual === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.classList.toggle("dark", dark);
+  return dark;
+}
+
 function focusSearchResult(announce = false) {
   const id = searchMatches[searchIndex];
   const device = devices.find((x) => x.id === id);
@@ -18,11 +27,7 @@ function focusSearchResult(announce = false) {
 
 function bind() {
   $("#scanBtn").onclick = startScan;
-  $("#manageBtn").onclick = openManager;
-  $("#activityBtn").onclick = openActivity;
-  $("#activityClose").onclick = () => $("#activityDialog").close();
   $("#activityRefresh").onclick = loadActivity;
-  $("#managerClose").onclick = () => $("#managerDialog").close();
   [
     "managerSearch",
     "managerStatus",
@@ -49,16 +54,9 @@ function bind() {
       .run();
   $("#fitBtn").onclick = () => cy?.fit(undefined, 50);
   $("#closeDrawer").onclick = () => $("#drawer").classList.remove("open");
-  $("#settingsBtn").onclick = openSettings;
   $("#emptySetup").onclick = wizard;
   $("#wizardSave").onclick = saveWizard;
   $("#settingsSave").onclick = saveSettings;
-  $("#themeBtn").onclick = () => {
-    document.documentElement.classList.toggle("dark");
-    localStorage.theme = document.documentElement.classList.contains("dark")
-      ? "dark"
-      : "light";
-  };
   $("#search").oninput = (e) => {
     if (!cy) return;
     const q = e.target.value.trim().toLowerCase();
@@ -144,11 +142,16 @@ function showPane(v) {
   active?.classList.add("active");
 }
 document.addEventListener("DOMContentLoaded", async () => {
-  if (
-    localStorage.theme === "dark" ||
-    (!localStorage.theme && matchMedia("(prefers-color-scheme:dark)").matches)
-  )
-    document.documentElement.classList.add("dark");
+  applyThemeMode();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener(
+    "change",
+    () => {
+      if (localStorage.theme) return;
+      applyThemeMode();
+      applyTopologyTheme();
+      applyIconStyle();
+    },
+  );
   bindAccount();
   try {
     await requireAccount();
@@ -161,10 +164,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   bind();
   $("#layoutBtn").onclick = () => runTopologyLayout(true);
   $("#themeBtn").onclick = () => {
-    document.documentElement.classList.toggle("dark");
     localStorage.theme = document.documentElement.classList.contains("dark")
-      ? "dark"
-      : "light";
+      ? "light"
+      : "dark";
+    applyThemeMode();
     applyTopologyTheme();
     applyIconStyle();
     refresh();

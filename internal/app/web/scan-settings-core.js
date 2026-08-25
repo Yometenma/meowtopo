@@ -200,7 +200,6 @@ async function openSettings() {
   $("#notificationResult").textContent = "";
   $("#settingsError").textContent = "";
   showPane("main");
-  $("#settingsDialog").show();
   await appExtensions.settingsOpened();
 }
 async function saveSettings(e) {
@@ -220,7 +219,6 @@ async function saveSettings(e) {
     };
     await api("/api/settings", { method: "PATCH", body: JSON.stringify(v) });
     settings = { ...settings, ...v };
-    $("#settingsDialog").close();
     toast("设置已保存并生效");
   } catch (x) {
     $("#settingsError").textContent = x.message;

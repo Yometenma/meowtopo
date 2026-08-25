@@ -1,10 +1,33 @@
 /* Cytoscape rendering, layout and topology state. */
+function cssVar(name, fallback) {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+}
+function themeColors() {
+  return {
+    win: cssVar("--win", "#f7f9f7"),
+    chip: cssVar("--chip", "#f0f3f0"),
+    panel: cssVar("--panel-solid", "#ffffff"),
+    text: cssVar("--text", "#2e3338"),
+    muted: cssVar("--muted", "#828c88"),
+    line: cssVar("--line2", "#2a2f353a"),
+    acc: cssVar("--acc", "#3f7a55"),
+    ok: cssVar("--ok", "#3f7a55"),
+    warn: cssVar("--warn", "#96702a"),
+    bad: cssVar("--bad", "#a84a4f"),
+    info: cssVar("--info", "#3f7a8c"),
+    fresh: cssVar("--new", "#a8763d"),
+  };
+}
 function initCy() {
   if (!window.cytoscape) {
     $("#cy").innerHTML =
       '<div style="padding:3rem;text-align:center">拓扑组件未加载，请检查本地静态资源。</div>';
     return;
   }
+  const c = themeColors();
   cy = cytoscape({
     container: $("#cy"),
     elements: [],
@@ -15,16 +38,16 @@ function initCy() {
           shape: "roundrectangle",
           width: 154,
           height: 68,
-          "background-color": "#fffdf9",
-          "border-width": 2,
-          "border-color": "#b8c8c1",
+          "background-color": c.chip,
+          "border-width": 1.5,
+          "border-color": c.line,
           label: "data(display)",
           "text-valign": "center",
           "text-halign": "center",
           "font-size": 12,
           "font-weight": 600,
           "line-height": 1.5,
-          color: "#314941",
+          color: c.text,
           "text-wrap": "wrap",
           "text-max-width": 138,
           "overlay-opacity": 0,
@@ -32,62 +55,44 @@ function initCy() {
       },
       {
         selector: 'node[status="online"]',
-        style: { "background-color": "#effaf4", "border-color": "#57bd82" },
+        style: { "border-color": c.ok },
       },
       {
         selector: 'node[status="suspected_offline"]',
-        style: { "background-color": "#fff8e5", "border-color": "#dfb23f" },
+        style: { "border-color": c.warn },
       },
       {
         selector: 'node[status="offline"]',
-        style: {
-          "background-color": "#f0f3f2",
-          "border-color": "#9ca9a4",
-          color: "#78847f",
-          opacity: 0.72,
-        },
+        style: { "border-color": c.muted, color: c.muted, opacity: 0.6 },
       },
       {
         selector: 'node[status="unknown"]',
-        style: { "background-color": "#f6f7f6", "border-color": "#aab7b2" },
+        style: { "border-color": c.muted },
       },
       {
         selector: 'node[isnew="true"]',
         style: {
-          "underlay-color": "#eea35b",
-          "underlay-opacity": 0.16,
+          "underlay-color": c.fresh,
+          "underlay-opacity": 0.18,
           "underlay-padding": 7,
           "underlay-shape": "roundrectangle",
         },
       },
       {
         selector: 'node[type="gateway"],node[type="router"]',
-        style: {
-          width: 176,
-          height: 76,
-          "background-color": "#dcf4e9",
-          "border-width": 3,
-          "border-color": "#45ad75",
-          "font-size": 13,
-        },
+        style: { width: 176, height: 76, "border-width": 2, "font-size": 13 },
       },
       {
         selector: 'node[type="internet"]',
-        style: {
-          width: 160,
-          height: 72,
-          "background-color": "#eaf3fb",
-          "border-color": "#78a9ca",
-          "font-size": 13,
-        },
+        style: { width: 160, height: 72, "border-color": c.info },
       },
       {
         selector: "node:selected",
         style: {
-          "border-width": 4,
-          "border-color": "#2c9b68",
-          "underlay-color": "#78c7a8",
-          "underlay-opacity": 0.2,
+          "border-width": 3,
+          "border-color": c.acc,
+          "underlay-color": c.acc,
+          "underlay-opacity": 0.16,
           "underlay-padding": 9,
         },
       },
@@ -98,32 +103,28 @@ function initCy() {
           "taxi-direction": "downward",
           "taxi-turn": 22,
           "taxi-turn-min-distance": 12,
-          width: 2,
-          "line-color": "#9fb4ab",
+          width: 1.6,
+          "line-color": c.muted,
           "target-arrow-shape": "none",
-          opacity: 0.7,
+          opacity: 0.55,
         },
       },
       {
         selector: 'edge[sourceType="inferred"]',
-        style: {
-          "line-style": "dashed",
-          "line-color": "#c1cec8",
-          opacity: 0.65,
-        },
+        style: { "line-style": "dashed", opacity: 0.35 },
       },
       {
         selector: 'edge[type="wifi"]',
-        style: { "line-style": "dashed", "line-color": "#79aeca" },
+        style: { "line-style": "dashed", "line-color": c.info },
       },
       { selector: 'edge[type="unknown"]', style: { "line-style": "dotted" } },
       {
         selector: 'edge[confirmed="true"]',
         style: {
           "line-style": "solid",
-          "line-color": "#6f9d89",
-          opacity: 0.95,
-          width: 3,
+          "line-color": c.acc,
+          opacity: 0.85,
+          width: 2.4,
         },
       },
     ],
@@ -135,75 +136,30 @@ function initCy() {
 }
 function applyTopologyTheme() {
   if (!cy) return;
-  const dark = document.documentElement.classList.contains("dark");
-  const colors = dark
-    ? {
-        base: "#24342d",
-        text: "#e8f1ed",
-        border: "#465e54",
-        online: "#223d32",
-        onlineBorder: "#62c78c",
-        warn: "#443a22",
-        warnBorder: "#d8ae45",
-        off: "#293530",
-        offBorder: "#71847b",
-        muted: "#a3b6ae",
-        gateway: "#24483a",
-        gatewayBorder: "#64c692",
-        internet: "#243b49",
-        internetBorder: "#6fa5c7",
-      }
-    : {
-        base: "#fffdf9",
-        text: "#314941",
-        border: "#b8c8c1",
-        online: "#effaf4",
-        onlineBorder: "#57bd82",
-        warn: "#fff8e5",
-        warnBorder: "#dfb23f",
-        off: "#f0f3f2",
-        offBorder: "#9ca9a4",
-        muted: "#78847f",
-        gateway: "#dcf4e9",
-        gatewayBorder: "#45ad75",
-        internet: "#eaf3fb",
-        internetBorder: "#78a9ca",
-      };
+  const c = themeColors();
   cy.style()
     .selector("node")
     .style({
-      "background-color": colors.base,
-      "border-color": colors.border,
-      color: colors.text,
+      "background-color": c.chip,
+      "border-color": c.line,
+      color: c.text,
     })
     .selector('node[status="online"]')
-    .style({
-      "background-color": colors.online,
-      "border-color": colors.onlineBorder,
-      color: colors.text,
-    })
+    .style({ "border-color": c.ok, color: c.text })
     .selector('node[status="suspected_offline"]')
-    .style({
-      "background-color": colors.warn,
-      "border-color": colors.warnBorder,
-      color: colors.text,
-    })
+    .style({ "border-color": c.warn, color: c.text })
     .selector('node[status="offline"]')
-    .style({
-      "background-color": colors.off,
-      "border-color": colors.offBorder,
-      color: colors.muted,
-    })
-    .selector('node[type="gateway"],node[type="router"]')
-    .style({
-      "background-color": colors.gateway,
-      "border-color": colors.gatewayBorder,
-    })
+    .style({ "border-color": c.muted, color: c.muted })
+    .selector('node[status="unknown"]')
+    .style({ "border-color": c.muted })
     .selector('node[type="internet"]')
-    .style({
-      "background-color": colors.internet,
-      "border-color": colors.internetBorder,
-    })
+    .style({ "border-color": c.info })
+    .selector("edge")
+    .style({ "line-color": c.muted })
+    .selector('edge[type="wifi"]')
+    .style({ "line-color": c.info })
+    .selector('edge[confirmed="true"]')
+    .style({ "line-color": c.acc })
     .update();
 }
 const iconDrawings = {
@@ -265,21 +221,18 @@ function deviceArtwork(type, dark = false) {
   };
   return files[type]
     ? `/assets/devices/${files[type]}`
-    : deviceIcon(type, dark ? "#9fe0c2" : "#376252");
+    : deviceIcon(type, cssVar("--acc", dark ? "#8fe3b8" : "#3f7a55"));
 }
 function applyIconStyle() {
   if (!cy) return;
-  const dark = document.documentElement.classList.contains("dark"),
-    canvasBg = dark ? "#17241f" : "#f8f6f1",
-    labelBg = dark ? "#202f29" : "#fffdf9",
-    labelBorder = dark ? "#40584e" : "#d5e3dd";
+  const c = themeColors();
   cy.style()
     .selector("node")
     .style({
       shape: "ellipse",
-      width: 116,
-      height: 116,
-      "background-color": canvasBg,
+      width: 112,
+      height: 112,
+      "background-color": c.win,
       "border-width": 0,
       "background-image": "data(art)",
       "background-image-opacity": 1,
@@ -289,16 +242,19 @@ function applyIconStyle() {
       "background-position-y": "42%",
       "background-fit": "contain",
       "background-clip": "none",
+      "font-family": cssVar("--mono", "monospace"),
+      "font-size": 10.5,
+      "font-weight": 600,
       "text-valign": "bottom",
       "text-halign": "center",
       "text-margin-x": 0,
-      "text-margin-y": 22,
+      "text-margin-y": 20,
       "text-max-width": 132,
-      "text-background-color": labelBg,
+      "text-background-color": c.panel,
       "text-background-opacity": 0.94,
       "text-background-shape": "roundrectangle",
       "text-background-padding": 6,
-      "text-border-color": labelBorder,
+      "text-border-color": c.line,
       "text-border-width": 1,
       "text-border-opacity": 1,
       "underlay-shape": "ellipse",
@@ -306,48 +262,48 @@ function applyIconStyle() {
     })
     .selector('node[status="online"]')
     .style({
-      "background-color": canvasBg,
+      "background-color": c.win,
       "border-width": 0,
-      "underlay-color": "#62c78c",
-      "underlay-opacity": 0.11,
+      "underlay-color": c.ok,
+      "underlay-opacity": 0.14,
     })
     .selector('node[status="suspected_offline"]')
     .style({
-      "background-color": canvasBg,
+      "background-color": c.win,
       "border-width": 0,
-      "underlay-color": "#d8ae45",
-      "underlay-opacity": 0.14,
+      "underlay-color": c.warn,
+      "underlay-opacity": 0.16,
     })
     .selector('node[status="offline"]')
     .style({
-      "background-color": canvasBg,
+      "background-color": c.win,
       "border-width": 0,
-      "underlay-color": "#83978d",
-      "underlay-opacity": 0.08,
+      "underlay-color": c.muted,
+      "underlay-opacity": 0.1,
     })
     .selector('node[status="unknown"]')
     .style({
-      "background-color": canvasBg,
+      "background-color": c.win,
       "border-width": 0,
-      "underlay-color": "#9caea6",
+      "underlay-color": c.muted,
       "underlay-opacity": 0.08,
     })
     .selector('node[isnew="true"]')
     .style({
-      "underlay-color": "#eea35b",
-      "underlay-opacity": 0.2,
+      "underlay-color": c.fresh,
+      "underlay-opacity": 0.24,
       "underlay-padding": 8,
     })
     .selector('node[type="gateway"],node[type="router"],node[type="internet"]')
     .style({
-      width: 128,
-      height: 128,
-      "background-color": canvasBg,
+      width: 126,
+      height: 126,
+      "background-color": c.win,
       "border-width": 0,
     })
     .selector("node.found")
     .style({
-      "underlay-color": "#3aa7d6",
+      "underlay-color": c.info,
       "underlay-opacity": 0.5,
       "underlay-padding": 9,
     })
@@ -401,7 +357,7 @@ function elements() {
     }));
   return [...nodes, ...edges];
 }
-function runTopologyLayout(animate = false) {
+function runTopologyLayout(animate = false, fitAfter = false) {
   if (!cy || !cy.nodes().length) return;
   const roots = cy.nodes('[type="internet"]');
   const layout = cy.layout({
@@ -421,6 +377,7 @@ function runTopologyLayout(animate = false) {
       .filter((n) => !n.locked())
       .forEach((n) => savePosition(n));
     localStorage.meowtopoLayout = "artwork-v1";
+    if (fitAfter) cy.fit(undefined, 60);
   });
   layout.run();
 }
@@ -434,13 +391,10 @@ async function refresh(runLayout = false) {
     cy.elements().remove();
     cy.add(elements());
     const upgradeLayout = localStorage.meowtopoLayout !== "artwork-v1";
-    if (
-      runLayout ||
-      upgradeLayout ||
-      !had ||
-      devices.every((d) => !d.x && !d.y)
-    )
-      runTopologyLayout(false);
+    const freshLayout =
+      !had || devices.every((d) => !d.x && !d.y);
+    if (runLayout || upgradeLayout || freshLayout)
+      runTopologyLayout(false, freshLayout);
     else
       devices
         .filter((d) => d.locked)

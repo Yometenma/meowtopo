@@ -1,0 +1,362 @@
+/* Application shell: floating dock, waybar and workspace pages. */
+#app {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: var(--gap);
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--gap);
+}
+/* Icon dock. */
+.dock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 20;
+}
+.dock-home {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, var(--acc), var(--acc2));
+  color: var(--acc-text);
+  font: 700 15px var(--mono);
+  border: 0;
+}
+.dock-home:hover {
+  filter: brightness(1.06);
+}
+.dock-nav {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+}
+.dock-nav svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dock-nav:hover {
+  color: var(--text);
+  background: var(--chip);
+}
+.dock-nav.active {
+  color: var(--acc);
+  background: var(--chip);
+  border-color: var(--line2);
+}
+.dock-nav.active::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--acc);
+}
+.dock-tip {
+  position: absolute;
+  left: 50px;
+  top: 50%;
+  translate: 0 -50%;
+  padding: 4px 9px;
+  border: 1px solid var(--line2);
+  border-radius: 7px;
+  background: var(--panel-solid);
+  color: var(--text);
+  font: 11px var(--mono);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.15s;
+  z-index: 30;
+}
+.dock-nav:hover .dock-tip,
+.dock-nav:focus-visible .dock-tip {
+  opacity: 1;
+}
+.sidebar-foot {
+  margin-top: auto;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 0 2px;
+  color: var(--muted);
+  font: 9px var(--mono);
+  letter-spacing: 0.12em;
+  writing-mode: vertical-rl;
+}
+.sidebar-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px var(--ring);
+}
+.sidebar-foot.disconnected .sidebar-pulse {
+  background: var(--warn);
+}
+/* Waybar. */
+main {
+  display: grid;
+  grid-template-rows: 46px 1fr;
+  gap: var(--gap);
+  min-width: 0;
+  min-height: 0;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  z-index: 15;
+}
+.ws-title {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ws-title b {
+  color: var(--acc);
+  font-weight: 600;
+}
+.ws-cursor {
+  color: var(--acc);
+  animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.bar-mods {
+  display: flex;
+  gap: 6px;
+}
+.mod {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--chip);
+  color: var(--muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mod:hover {
+  border-color: var(--line2);
+  color: var(--text);
+}
+.mod b {
+  color: var(--text);
+  font-weight: 600;
+}
+.mod .up {
+  color: var(--ok);
+  font-style: normal;
+}
+.mod .mid {
+  color: var(--warn);
+  font-style: normal;
+}
+.mod .down {
+  color: var(--bad);
+  font-style: normal;
+}
+.status-card.active-filter {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+.bar-sp {
+  flex: 1;
+}
+.mod-acc {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--acc-text);
+  font-weight: 700;
+}
+.mod-acc:hover {
+  color: var(--acc-text);
+  filter: brightness(1.06);
+}
+.bar-search {
+  cursor: text;
+}
+.bar-search input {
+  width: 150px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  color: var(--text);
+}
+#accountBtn {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#accountBtn.active {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+/* Pages. */
+.page {
+  min-height: 0;
+  min-width: 0;
+}
+.page-scroll {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px 2px 26px;
+}
+/* Tiled-window chrome used by the topology page. */
+.win {
+  display: grid;
+  grid-template-rows: 34px 1fr;
+  height: 100%;
+  border: 1px solid var(--line2);
+  border-radius: var(--r);
+  background: var(--win);
+  overflow: hidden;
+}
+.win-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  font: 11px var(--mono);
+  color: var(--muted);
+  min-width: 0;
+}
+.win-title .dots {
+  display: flex;
+  gap: 5px;
+  flex: none;
+}
+.win-title .dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line2);
+}
+.win-title .dots i:first-child {
+  background: var(--acc);
+}
+.win-title b {
+  color: var(--text);
+  font-weight: 600;
+}
+.win-sep {
+  color: var(--line2);
+}
+.win-title span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#networkHealthText.has-warning {
+  color: var(--warn);
+}
+/* Canvas-only chrome stays on the topology page. */
+body:not([data-workspace="overview"]) .fab,
+body:not([data-workspace="overview"]) .bar-search {
+  display: none;
+}
+/* Tablet: slimmer dock. */
+@media (max-width: 1050px) {
+  .bar-mods .status-card:not(:last-child) {
+    display: none;
+  }
+  .bar-search input {
+    width: 110px;
+  }
+}
+/* Phone: dock becomes a bottom bar. */
+@media (max-width: 700px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr calc(58px + env(safe-area-inset-bottom));
+    padding: 8px;
+    gap: 8px;
+  }
+  .dock {
+    order: 2;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+  }
+  .dock-home {
+    display: none;
+  }
+  .dock-nav.active::before {
+    left: 50%;
+    top: -8px;
+    translate: -50% 0;
+    width: 18px;
+    height: 3px;
+  }
+  .dock-tip,
+  .sidebar-foot span:last-child {
+    display: none;
+  }
+  .sidebar-foot {
+    writing-mode: horizontal-tb;
+    margin: 0;
+    padding: 0;
+  }
+  main {
+    order: 1;
+    grid-template-rows: 44px 1fr;
+  }
+  .bar {
+    padding: 0 8px;
+    gap: 5px;
+  }
+  .ws-title .ws-user,
+  .bar-mods {
+    display: none;
+  }
+  .bar-search {
+    flex: 1;
+  }
+  .bar-search input {
+    width: 100%;
+  }
+  #toast {
+    top: 60px;
+  }
+}

@@ -6,14 +6,22 @@
       name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
-    <meta name="theme-color" content="#83c9ad" />
+    <meta
+      name="theme-color"
+      content="#1b2220"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#eef1ef"
+      media="(prefers-color-scheme: light)"
+    />
     <title>MeowTopo · 喵拓</title>
     <link rel="stylesheet" href="/style.css" />
-    <link rel="stylesheet" href="/components.css" />
-    <link rel="stylesheet" href="/dashboard.css" />
-    <link rel="stylesheet" href="/polish.css" />
+    <link rel="stylesheet" href="/layout.css" />
+    <link rel="stylesheet" href="/topology.css" />
+    <link rel="stylesheet" href="/pages.css" />
     <link rel="stylesheet" href="/dialogs.css" />
-    <link rel="stylesheet" href="/workspace.css" />
     <script defer src="/assets/cytoscape.min.js"></script>
     <script defer src="/app.js"></script>
     <script defer src="/topology-core.js"></script>
@@ -27,192 +35,376 @@
     <script defer src="/features.js"></script>
     <script defer src="/app-bootstrap.js"></script>
   </head>
-  <body class="dashboard-shell">
+  <body data-workspace="overview">
     <div id="app">
-      <aside id="appSidebar" class="app-sidebar">
-        <button class="brand plain" id="homeBtn" aria-label="回到拓扑">
-          <span class="logo">M</span
-          ><span
-            ><b>MeowTopo</b><small>喵拓 · Home Network Topology</small></span
-          >
+      <nav class="dock" aria-label="主导航">
+        <button class="dock-home" id="homeBtn" aria-label="回到拓扑并适应画布">
+          ~
         </button>
-        <nav class="sidebar-nav">
-          <button
-            type="button"
-            class="nav-button active"
-            id="overviewNav"
-            data-workspace="overview"
-            aria-label="拓扑总览"
-            aria-current="page"
+        <button
+          type="button"
+          class="dock-nav active"
+          id="overviewNav"
+          data-workspace="overview"
+          aria-label="拓扑总览"
+          aria-current="page"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9 20v-6h6v6" /></svg>
+          <span class="dock-tip">拓扑总览</span>
+        </button>
+        <button
+          type="button"
+          class="dock-nav"
+          id="manageBtn"
+          data-workspace="devices"
+          aria-label="设备管理"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="3" /><path d="M8 21h8m-4-4v4M7 9h.01m4 0h6" /></svg>
+          <span class="dock-tip">设备管理</span>
+        </button>
+        <button
+          type="button"
+          class="dock-nav"
+          id="activityBtn"
+          data-workspace="activity"
+          aria-label="运行记录"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3" /></svg>
+          <span class="dock-tip">运行记录</span>
+        </button>
+        <button
+          type="button"
+          class="dock-nav"
+          id="settingsBtn"
+          data-workspace="settings"
+          aria-label="系统设置"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg>
+          <span class="dock-tip">系统设置</span>
+        </button>
+        <span class="sidebar-foot"
+          ><span class="sidebar-pulse"></span><span>本地运行中</span></span
+        >
+      </nav>
+
+      <main>
+        <header class="bar">
+          <span class="ws-title"
+            ><span class="ws-user">meow@lan</span>
+            <b id="pagePath">~/topology</b><span class="ws-cursor">▌</span></span
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9 20v-6h6v6" /></svg><span>拓扑总览</span>
-          </button>
-          <button
-            type="button"
-            class="nav-button"
-            id="manageBtn"
-            data-workspace="devices"
-            aria-label="设备管理"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="3" /><path d="M8 21h8m-4-4v4M7 9h.01m4 0h6" /></svg><span>设备管理</span>
-          </button>
-          <button
-            type="button"
-            class="nav-button"
-            id="activityBtn"
-            data-workspace="activity"
-            aria-label="运行记录"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3" /></svg><span>运行记录</span>
-          </button>
-          <button
-            type="button"
-            class="nav-button"
-            id="settingsBtn"
-            data-workspace="settings"
-            aria-label="系统设置"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg><span>系统设置</span>
-          </button>
-        </nav>
-        <div class="sidebar-foot">
-          <span class="sidebar-pulse"></span><span>本地运行中</span>
-        </div>
-      </aside>
-      <header class="topbar">
-        <div class="page-heading" aria-live="polite">
-          <small id="pageEyebrow">家庭网络中心</small>
-          <strong id="pageTitle">网络拓扑</strong>
-        </div>
-        <div class="stats">
-          <span
-            class="status-card"
-            data-status="online"
-            tabindex="0"
-            role="button"
-            aria-label="查看在线设备"
-            ><i class="dot online"></i><b id="onlineN">0</b> 在线</span
-          ><span
-            class="status-card"
-            data-status="suspected_offline"
-            tabindex="0"
-            role="button"
-            aria-label="查看疑似离线设备"
-            ><i class="dot suspected"></i><b id="suspectN">0</b> 疑似离线</span
-          ><span
-            class="status-card"
-            data-status="offline"
-            tabindex="0"
-            role="button"
-            aria-label="查看离线设备"
-            ><i class="dot offline"></i><b id="offlineN">0</b> 离线</span
-          ><span
-            class="status-card"
-            data-status=""
-            tabindex="0"
-            role="button"
-            aria-label="查看全部设备"
-            ><b id="totalN">0</b> 设备</span>
-        </div>
-        <div class="actions">
-          <label class="search"
+          <div class="bar-mods">
+            <button
+              type="button"
+              class="mod status-card"
+              data-status="online"
+              aria-label="查看在线设备"
+              ><i class="up">▲</i><b id="onlineN">0</b> online</button
+            ><button
+              type="button"
+              class="mod status-card"
+              data-status="suspected_offline"
+              aria-label="查看疑似离线设备"
+              ><i class="mid">~</i><b id="suspectN">0</b> suspected</button
+            ><button
+              type="button"
+              class="mod status-card"
+              data-status="offline"
+              aria-label="查看离线设备"
+              ><i class="down">▼</i><b id="offlineN">0</b> offline</button
+            ><button
+              type="button"
+              class="mod status-card"
+              data-status=""
+              aria-label="查看全部设备"
+              ><b id="totalN">0</b> total</button
+            >
+          </div>
+          <span class="bar-sp"></span>
+          <label class="mod bar-search"
             ><span>⌕</span
             ><input
               id="search"
-              placeholder="搜索设备或 IP"
-              aria-label="搜索设备" /></label
-          ><button id="scanBtn" class="primary">立即扫描</button
-          ><button id="themeBtn" title="切换主题">◐</button
-          ><button id="accountBtn" class="hidden">账户</button>
-        </div>
-      </header>
-      <main>
-        <section id="canvasPage" class="canvas-page">
-          <div id="cy"></div>
-          <section class="canvas-context" aria-label="拓扑状态">
-            <span class="context-kicker"><i></i> LIVE TOPOLOGY</span>
-            <strong>家庭网络拓扑</strong>
-            <small id="networkHealthText">正在读取网络状态…</small>
-          </section>
-          <div class="canvas-toolbar">
-            <button
-              type="button"
-              id="mobileSelectBtn"
-              class="mobile-select-button hidden"
-              title="选择多个设备"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4" /><path d="M9 9h6v6H9z" /></svg><span>选择</span>
-            </button>
-            <button type="button" id="layoutBtn" title="自动布局">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="12" cy="18" r="2" /><path d="m7.7 7.1 3.2 8.8m5.4-8.8-3.2 8.8M8 6h8" /></svg><span>整理布局</span>
-            </button>
-            <button type="button" id="fitBtn" title="适应屏幕">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5" /></svg><span>适应画布</span>
-            </button>
-            <button type="button" id="canvasHelpBtn" title="查看拓扑操作指南">
-              <b class="help-symbol">?</b><span>使用帮助</span>
-            </button>
-          </div>
-          <div id="selectionBar" class="selection-bar hidden">
-            <b><span id="selectionCount">0</span> 台已选</b
-            ><button type="button" data-align="horizontal">横向对齐</button
-            ><button type="button" data-align="vertical">纵向对齐</button
-            ><button type="button" id="clearSelectionBtn">取消选择</button>
-          </div>
-          <div class="legend">
-            <span><i class="dot online"></i>在线</span
-            ><span><i class="dot suspected"></i>疑似离线</span
-            ><span><i class="dot offline"></i>离线</span
-            ><span><i class="dot new"></i>新设备</span
-            ><span class="muted">虚线为推测连接</span
-            ><span class="muted selection-hint">Shift + 拖动框选</span>
-          </div>
-          <div id="scanProgress" class="progress hidden">
-            <div>
-              <b id="progressTitle">正在扫描</b><span id="progressText"></span>
+              placeholder="search device / ip…"
+              aria-label="搜索设备"
+          /></label>
+          <button type="button" class="mod mod-acc" id="scanBtn">
+            ▶ scan
+          </button>
+          <button type="button" class="mod" id="themeBtn" title="切换明暗主题">
+            ◐
+          </button>
+          <button type="button" class="mod hidden" id="accountBtn">账户</button>
+        </header>
+
+        <section class="page" id="pageTopology" data-page="overview">
+          <div class="win">
+            <div class="win-title">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <b>topology</b>
+              <span class="win-sep">::</span>
+              <span id="networkHealthText">正在读取网络状态…</span>
             </div>
-            <progress id="progressBar" max="100" value="0"></progress>
-          </div>
-          <div id="empty" class="empty hidden">
-            <img
-              src="/assets/topo-chan.png"
-              alt="Topo酱"
-              onerror="this.hidden=true"
-            />
-            <h2>拓扑还是空的喵</h2>
-            <p>完成网络设置并开始第一次扫描，设备会出现在这里。</p>
-            <button id="emptySetup" class="primary">开始设置</button>
+            <div class="stage" id="canvasPage">
+              <div id="cy"></div>
+              <div class="canvas-toolbar">
+                <button
+                  type="button"
+                  id="mobileSelectBtn"
+                  class="mobile-select-button hidden"
+                  title="选择多个设备"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4" /><path d="M9 9h6v6H9z" /></svg><span>选择</span>
+                </button>
+                <button type="button" id="layoutBtn" title="自动布局">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="12" cy="18" r="2" /><path d="m7.7 7.1 3.2 8.8m5.4-8.8-3.2 8.8M8 6h8" /></svg><span>layout</span>
+                </button>
+                <button type="button" id="fitBtn" title="适应屏幕">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5" /></svg><span>fit</span>
+                </button>
+                <button type="button" id="canvasHelpBtn" title="查看拓扑操作指南">
+                  <b class="help-symbol">?</b><span>help</span>
+                </button>
+              </div>
+              <div id="selectionBar" class="selection-bar hidden">
+                <b><span id="selectionCount">0</span> 台已选</b
+                ><button type="button" data-align="horizontal">横向对齐</button
+                ><button type="button" data-align="vertical">纵向对齐</button
+                ><button type="button" id="clearSelectionBtn">取消选择</button>
+              </div>
+              <div class="legend">
+                <span><i class="up">▲</i> online</span
+                ><span><i class="mid">~</i> suspected</span
+                ><span><i class="down">▼</i> offline</span
+                ><span><i class="nw">●</i> new</span
+                ><span class="muted">虚线为推测连接</span
+                ><span class="muted selection-hint">shift+drag 框选</span>
+              </div>
+              <div id="scanProgress" class="progress hidden">
+                <div>
+                  <b id="progressTitle">正在扫描</b
+                  ><span id="progressText"></span>
+                </div>
+                <progress id="progressBar" max="100" value="0"></progress>
+              </div>
+              <div id="empty" class="empty hidden">
+                <div class="empty-kaomoji">(=^･ω･^=)</div>
+                <h2>拓扑还是空的</h2>
+                <p>完成网络设置并开始第一次扫描，设备会出现在这里。</p>
+                <button id="emptySetup" class="primary">开始设置</button>
+              </div>
+            </div>
           </div>
         </section>
-        <aside id="drawer" class="drawer">
-          <button class="close plain" id="closeDrawer">×</button>
-          <div id="detail"></div>
-        </aside>
+
+        <section class="page hidden" id="pageDevices" data-page="devices">
+          <div class="page-scroll">
+            <div class="manager-toolbar">
+              <div class="manager-filters">
+                <label class="mod field-mod"
+                  ><span>⌕</span
+                  ><input
+                    id="managerSearch"
+                    placeholder="搜索设备名称、IP 或 MAC"
+                /></label>
+                <select id="managerStatus">
+                  <option value="">所有状态</option>
+                  <option value="online">在线</option>
+                  <option value="suspected_offline">疑似离线</option>
+                  <option value="offline">离线</option>
+                  <option value="unknown">未知</option>
+                </select>
+                <select id="managerType">
+                  <option value="">所有类型</option>
+                </select>
+                <select id="managerVisibility">
+                  <option value="">显示和隐藏</option>
+                  <option value="visible">拓扑中显示</option>
+                  <option value="hidden">已隐藏</option>
+                </select>
+              </div>
+              <div class="manager-subbar">
+                <span id="managerSummary" class="manager-summary muted"></span>
+                <span class="bar-sp"></span>
+                <label class="check"
+                  ><input id="managerSelectAll" type="checkbox" />全选结果</label
+                ><span id="managerSelected" class="muted">已选 0 台</span>
+              </div>
+              <div class="batch-bar">
+                <button data-batch="clear_new">取消新设备标记</button
+                ><button data-batch="hide">隐藏</button
+                ><button data-batch="unhide">恢复显示</button
+                ><select id="batchParent">
+                  <option value="">选择上级设备…</option></select
+                ><select id="batchConnection">
+                  <option value="unknown">未知连接</option>
+                  <option value="ethernet">网线</option>
+                  <option value="wifi">Wi-Fi</option>
+                  <option value="logical">逻辑连接</option>
+                  <option value="virtual">虚拟连接</option></select
+                ><button id="batchParentSave" class="primary">修改连接</button>
+              </div>
+            </div>
+            <div id="managerList" class="manager-list"></div>
+          </div>
+        </section>
+
+        <section class="page hidden" id="pageActivity" data-page="activity">
+          <div class="page-scroll">
+            <div class="activity-head">
+              <div class="activity-overview">
+                <span><b id="activityEventCount">0</b>次设备变化</span
+                ><span><b id="activityScanCount">0</b>次扫描记录</span
+                ><span><b id="activityLatestTime">—</b>最近活动</span>
+              </div>
+              <button type="button" id="activityRefresh" class="mod">
+                ↻ refresh
+              </button>
+            </div>
+            <div class="activity-tabs">
+              <button type="button" class="active" data-activity-pane="events">
+                设备上线与离线</button
+              ><button type="button" data-activity-pane="scans">扫描记录</button>
+            </div>
+            <div class="activity-columns">
+              <section data-activity-content="scans" class="hidden">
+                <div id="scanHistoryList" class="activity-list"></div>
+              </section>
+              <section data-activity-content="events">
+                <div id="statusEventList" class="activity-list"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="page hidden" id="pageSettings" data-page="settings">
+          <div class="page-scroll">
+            <form id="settingsForm" class="settings-page">
+              <div class="tabs">
+                <button type="button" class="active">扫描设置</button
+                ><button type="button" id="backupTab">备份与恢复</button
+                ><button type="button" id="aboutTab">关于</button>
+              </div>
+              <div id="settingsMain" class="settings-groups">
+                <section class="settings-group">
+                  <div class="settings-group-title">
+                    <b>扫描范围</b><small>告诉喵拓要检查哪一段家庭网络</small>
+                  </div>
+                  <div class="formgrid">
+                    <label
+                      >使用的网卡<select id="setInterface">
+                        <option value="">自动选择</option>
+                      </select></label
+                    ><label>扫描网段<input id="setCIDR" /></label
+                    ><label>家庭主网关<input id="setGateway" /></label
+                    ><label
+                      >多久扫描一次<input id="setInterval" placeholder="5m" /><small
+                        >例如 5m 表示每 5 分钟</small
+                      ></label
+                    >
+                  </div>
+                </section>
+                <details class="settings-group advanced-settings">
+                  <summary>
+                    <span
+                      ><b>高级探测设置</b><small>网络正常时不建议修改</small></span
+                    >
+                  </summary>
+                  <div class="formgrid">
+                    <label
+                      >Ping 等待时间<input
+                        id="setPingTimeout"
+                        placeholder="800ms" /></label
+                    ><label
+                      >端口等待时间<input
+                        id="setTCPTimeout"
+                        placeholder="350ms" /></label
+                    ><label
+                      >同时检查数量<input
+                        id="setConcurrency"
+                        type="number"
+                        min="1"
+                        max="128" /></label
+                    ><label
+                      >连续失败几次算离线<input
+                        id="setThreshold"
+                        type="number"
+                        min="2"
+                        max="20" /></label
+                    ><label class="check"
+                      ><input
+                        id="setPortScan"
+                        type="checkbox"
+                      />辅助检查常用端口</label
+                    >
+                  </div>
+                </details>
+                <section class="settings-group snmp-settings">
+                  <div class="settings-group-title">
+                    <b>受管网络设备与 LLDP</b
+                    ><small>从支持 SNMP 的路由器、交换机或 AP 读取真实邻居和端口信息</small>
+                  </div>
+                  <p class="muted">
+                    需要先在设备管理页面启用只读 SNMP。喵拓不会尝试默认密码，也不会修改设备配置。
+                  </p>
+                  <div class="snmp-toolbar">
+                    <button type="button" id="snmpAdd">添加受管设备</button>
+                    <button type="button" id="snmpPoll">立即读取全部设备</button>
+                    <span id="snmpSummary" class="muted"></span>
+                  </div>
+                  <div id="snmpTargets" class="snmp-targets"></div>
+                </section>
+              </div>
+              <div id="backupPane" class="hidden pane">
+                <p>备份包含设置、设备、拓扑关系和节点位置。</p>
+                <div class="pane-actions">
+                  <a class="button" href="/api/backup">下载备份</a
+                  ><label class="button"
+                    >恢复备份<input
+                      id="restoreFile"
+                      type="file"
+                      accept=".zip"
+                      hidden
+                  /></label>
+                </div>
+              </div>
+              <div id="aboutPane" class="hidden pane">
+                <h3>MeowTopo · 喵拓</h3>
+                <p>轻量级家庭局域网拓扑监控。所有数据默认保存在本机。</p>
+                <p class="muted">
+                  在没有 SNMP、LLDP
+                  或控制器数据时，连接关系只是逻辑推测，不代表真实物理端口。
+                </p>
+                <p id="versionText" class="mono"></p>
+              </div>
+              <p id="settingsError" class="error"></p>
+              <div class="page-actions">
+                <button id="settingsSave" class="primary">保存设置</button>
+              </div>
+            </form>
+          </div>
+        </section>
       </main>
-      <div id="toast" role="status"></div>
     </div>
+
+    <aside id="drawer" class="drawer">
+      <button class="close plain" id="closeDrawer">×</button>
+      <div id="detail"></div>
+    </aside>
+    <button id="addBtn" class="fab" title="添加手工节点">＋</button>
+    <div id="toast" role="status"></div>
+
     <dialog id="wizard">
       <form method="dialog" id="wizardForm">
         <div class="welcome">
           <div>
-            <div class="brandline">
-              <span class="logo large">M</span>
-              <div>
-                <h1>MeowTopo <span>喵拓</span></h1>
-                <p>Your LAN, connected.</p>
-              </div>
-            </div>
-            <h2>欢迎回家，先认识一下你的网络</h2>
-            <p>
+            <span class="page-kicker">MEOWTOPO :: FIRST RUN</span>
+            <h1>欢迎回家，先认识一下你的网络</h1>
+            <p class="muted">
               只扫描你确认的私有网段。MeowTopo
               不上传设备信息，也不会自动扫描所有可达网络。
             </p>
           </div>
-          <img
-            src="/assets/topo-chan.png"
-            alt="Topo酱欢迎形象"
-            onerror="this.hidden=true"
-          />
         </div>
         <div id="detectBox" class="detect-box">正在检测网络接口与权限…</div>
         <div class="formgrid">
@@ -263,118 +455,14 @@
         </div>
       </form>
     </dialog>
-    <dialog id="settingsDialog">
-      <form method="dialog" id="settingsForm">
-        <div class="dialog-title">
-          <div>
-            <h2>系统设置</h2>
-            <p>日常使用通常无需修改，保持默认即可。</p>
-          </div>
-        </div>
-        <div class="tabs">
-          <button type="button" class="active">扫描设置</button
-          ><button type="button" id="backupTab">备份与恢复</button
-          ><button type="button" id="aboutTab">关于</button>
-        </div>
-        <div id="settingsMain" class="settings-groups">
-          <section class="settings-group">
-            <div class="settings-group-title">
-              <b>扫描范围</b><small>告诉喵拓要检查哪一段家庭网络</small>
-            </div>
-            <div class="formgrid">
-              <label
-                >使用的网卡<select id="setInterface">
-                  <option value="">自动选择</option>
-                </select></label
-              ><label>扫描网段<input id="setCIDR" /></label
-              ><label>家庭主网关<input id="setGateway" /></label
-              ><label
-                >多久扫描一次<input id="setInterval" placeholder="5m" /><small
-                  >例如 5m 表示每 5 分钟</small
-                ></label
-              >
-            </div>
-          </section>
-          <details class="settings-group advanced-settings">
-            <summary>
-              <span
-                ><b>高级探测设置</b><small>网络正常时不建议修改</small></span
-              >
-            </summary>
-            <div class="formgrid">
-              <label
-                >Ping 等待时间<input
-                  id="setPingTimeout"
-                  placeholder="800ms" /></label
-              ><label
-                >端口等待时间<input
-                  id="setTCPTimeout"
-                  placeholder="350ms" /></label
-              ><label
-                >同时检查数量<input
-                  id="setConcurrency"
-                  type="number"
-                  min="1"
-                  max="128" /></label
-              ><label
-                >连续失败几次算离线<input
-                  id="setThreshold"
-                  type="number"
-                  min="2"
-                  max="20" /></label
-              ><label class="check"
-                ><input
-                  id="setPortScan"
-                  type="checkbox"
-                />辅助检查常用端口</label
-              >
-            </div>
-          </details>
-          <section class="settings-group snmp-settings">
-            <div class="settings-group-title">
-              <b>受管网络设备与 LLDP</b
-              ><small>从支持 SNMP 的路由器、交换机或 AP 读取真实邻居和端口信息</small>
-            </div>
-            <p class="muted">
-              需要先在设备管理页面启用只读 SNMP。喵拓不会尝试默认密码，也不会修改设备配置。
-            </p>
-            <div class="snmp-toolbar">
-              <button type="button" id="snmpAdd">添加受管设备</button>
-              <button type="button" id="snmpPoll">立即读取全部设备</button>
-              <span id="snmpSummary" class="muted"></span>
-            </div>
-            <div id="snmpTargets" class="snmp-targets"></div>
-          </section>
-        </div>
-        <div id="backupPane" class="hidden pane">
-          <p>备份包含设置、设备、拓扑关系和节点位置。</p>
-          <a class="button" href="/api/backup">下载备份</a
-          ><label class="button"
-            >恢复备份<input id="restoreFile" type="file" accept=".zip" hidden
-          /></label>
-        </div>
-        <div id="aboutPane" class="hidden pane">
-          <h3>MeowTopo · 喵拓</h3>
-          <p>轻量级家庭局域网拓扑监控。所有数据默认保存在本机。</p>
-          <p class="muted">
-            在没有 SNMP、LLDP
-            或控制器数据时，连接关系只是逻辑推测，不代表真实物理端口。
-          </p>
-          <p id="versionText"></p>
-        </div>
-        <p id="settingsError" class="error"></p>
-        <div class="dialog-actions">
-          <button value="cancel">取消</button
-          ><button value="default" id="settingsSave" class="primary">
-            保存设置
-          </button>
-        </div>
-      </form>
-    </dialog>
+
     <dialog id="snmpDialog" class="snmp-dialog">
       <form method="dialog" id="snmpForm">
         <div class="manager-head">
-          <div><h2 id="snmpDialogTitle">添加受管网络设备</h2><p class="muted">网页不会再次显示已经保存的认证密码。</p></div>
+          <div>
+            <h2 id="snmpDialogTitle">添加受管网络设备</h2>
+            <p class="muted">网页不会再次显示已经保存的认证密码。</p>
+          </div>
           <button type="button" id="snmpClose">关闭</button>
         </div>
         <input id="snmpID" type="hidden" />
@@ -395,6 +483,7 @@
         <div class="dialog-actions"><button type="button" id="snmpCancel">取消</button><button value="default" id="snmpSave" class="primary">保存</button></div>
       </form>
     </dialog>
+
     <dialog id="manualDialog">
       <form method="dialog" id="manualForm">
         <h2>添加手工节点</h2>
@@ -414,130 +503,11 @@
         </div>
       </form>
     </dialog>
-    <dialog id="managerDialog">
-      <div class="manager-toolbar">
-        <div class="manager-head">
-          <div>
-            <h2>设备</h2>
-            <p class="muted">搜索设备，点击一行查看或修改详情。</p>
-          </div>
-          <button id="managerClose" aria-label="关闭">关闭</button>
-        </div>
-        <div class="manager-filters">
-          <input
-            id="managerSearch"
-            placeholder="搜索设备名称、IP 或 MAC"
-          /><select id="managerStatus">
-            <option value="">所有状态</option>
-            <option value="online">在线</option>
-            <option value="suspected_offline">疑似离线</option>
-            <option value="offline">离线</option>
-            <option value="unknown">未知</option></select
-          ><select id="managerType">
-            <option value="">所有类型</option></select
-          ><select id="managerVisibility">
-            <option value="">显示和隐藏</option>
-            <option value="visible">拓扑中显示</option>
-            <option value="hidden">已隐藏</option>
-          </select>
-        </div>
-        <div id="managerSummary" class="manager-summary muted"></div>
-        <div class="batch-bar">
-          <label class="check"
-            ><input id="managerSelectAll" type="checkbox" />选择当前结果</label
-          ><span id="managerSelected">已选 0 台</span
-          ><button data-batch="clear_new">取消新设备标记</button
-          ><button data-batch="hide">隐藏</button
-          ><button data-batch="unhide">恢复显示</button
-          ><select id="batchParent">
-            <option value="">选择上级设备…</option></select
-          ><select id="batchConnection">
-            <option value="unknown">未知连接</option>
-            <option value="ethernet">网线</option>
-            <option value="wifi">Wi-Fi</option>
-            <option value="logical">逻辑连接</option>
-            <option value="virtual">虚拟连接</option></select
-          ><button id="batchParentSave">修改连接</button>
-        </div>
-      </div>
-      <div id="managerList" class="manager-list"></div>
-    </dialog>
-    <dialog id="activityDialog">
-      <div class="manager-head">
-        <div>
-          <span class="page-kicker">ACTIVITY</span>
-          <h2>运行记录</h2>
-          <p class="muted">最近发生了什么，一眼就能看明白。</p>
-        </div>
-        <div>
-          <button id="activityRefresh">刷新</button
-          ><button id="activityClose">返回拓扑</button>
-        </div>
-      </div>
-      <div class="activity-overview">
-        <span><b id="activityEventCount">0</b>次设备变化</span
-        ><span><b id="activityScanCount">0</b>次扫描记录</span
-        ><span><b id="activityLatestTime">—</b>最近活动</span>
-      </div>
-      <div class="activity-tabs">
-        <button class="active" data-activity-pane="events">
-          设备上线与离线</button
-        ><button data-activity-pane="scans">扫描记录</button>
-      </div>
-      <div class="activity-columns">
-        <section data-activity-content="scans" class="hidden">
-          <div id="scanHistoryList" class="activity-list"></div>
-        </section>
-        <section data-activity-content="events">
-          <div id="statusEventList" class="activity-list"></div>
-        </section>
-      </div>
-    </dialog>
-    <dialog id="authDialog" class="auth-dialog">
-      <form method="dialog" id="authForm">
-        <div class="auth-brand">
-          <span class="logo large">M</span>
-          <div>
-            <h1 id="authTitle">登录 MeowTopo</h1>
-            <p id="authIntro" class="muted">登录后查看家里的网络状态。</p>
-          </div>
-        </div>
-        <label
-          >用户名<input
-            id="authUsername"
-            autocomplete="username"
-            required
-            maxlength="32" /></label
-        ><label id="authDisplayLabel" class="hidden"
-          >显示名称<input
-            id="authDisplayName"
-            autocomplete="name"
-            maxlength="40" /></label
-        ><label
-          >密码<input
-            id="authPassword"
-            type="password"
-            autocomplete="current-password"
-            required
-            minlength="10"
-            maxlength="128" /></label
-        ><label id="authConfirmLabel" class="hidden"
-          >确认密码<input
-            id="authConfirmPassword"
-            type="password"
-            autocomplete="new-password"
-            minlength="10"
-            maxlength="128"
-        /></label>
-        <p id="authError" class="error"></p>
-        <button id="authSubmit" value="default" class="primary auth-submit">
-          登录
-        </button>
-      </form>
-    </dialog>
+
     <dialog id="accountDialog">
       <div class="manager-head">
         <div>
+          <span class="page-kicker">ACCOUNT</span>
           <h2>账户与权限</h2>
           <p id="currentAccountText" class="muted"></p>
         </div>
@@ -587,6 +557,7 @@
       </div>
       <div class="dialog-actions"><button id="logoutBtn">退出登录</button></div>
     </dialog>
+
     <dialog id="resetPasswordDialog">
       <form method="dialog" id="resetPasswordForm">
         <div class="manager-head">
@@ -622,6 +593,50 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="authDialog" class="auth-dialog">
+      <form method="dialog" id="authForm">
+        <div class="auth-brand">
+          <span class="auth-mark">&gt;_</span>
+          <div>
+            <h1 id="authTitle">登录 MeowTopo</h1>
+            <p id="authIntro" class="muted">登录后查看家里的网络状态。</p>
+          </div>
+        </div>
+        <label
+          >用户名<input
+            id="authUsername"
+            autocomplete="username"
+            required
+            maxlength="32" /></label
+        ><label id="authDisplayLabel" class="hidden"
+          >显示名称<input
+            id="authDisplayName"
+            autocomplete="name"
+            maxlength="40" /></label
+        ><label
+          >密码<input
+            id="authPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+            minlength="10"
+            maxlength="128" /></label
+        ><label id="authConfirmLabel" class="hidden"
+          >确认密码<input
+            id="authConfirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="10"
+            maxlength="128"
+        /></label>
+        <p id="authError" class="error"></p>
+        <button id="authSubmit" value="default" class="primary auth-submit">
+          登录
+        </button>
+      </form>
+    </dialog>
+
     <dialog
       id="canvasHelpDialog"
       class="canvas-help-dialog"
@@ -712,6 +727,5 @@
         </div>
       </section>
     </dialog>
-    <button id="addBtn" class="fab" title="添加手工节点">＋</button>
   </body>
 </html>

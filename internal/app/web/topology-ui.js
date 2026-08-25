@@ -222,27 +222,29 @@ function openConnectionMenu(edge, renderedPosition) {
 
 appExtensions.topologyReady = function () {
   if (!cy) return;
+  const accent = cssVar("--acc", "#8fe3b8");
+  const fresh = cssVar("--new", "#e8bd9a");
   cy.boxSelectionEnabled(false);
   cy.selectionType("additive");
   cy.style()
     .selector("node:selected")
     .style({
-      "border-width": 6,
-      "border-color": "#35c98a",
+      "border-width": 5,
+      "border-color": accent,
       "border-opacity": 1,
-      "underlay-color": "#35c98a",
-      "underlay-opacity": 0.34,
-      "underlay-padding": 15,
+      "underlay-color": accent,
+      "underlay-opacity": 0.3,
+      "underlay-padding": 14,
       opacity: 1,
       "z-index": 20,
     })
     .selector("node.link-source")
     .style({
-      "border-width": 6,
-      "border-color": "#df9a3d",
-      "underlay-color": "#df9a3d",
+      "border-width": 5,
+      "border-color": fresh,
+      "underlay-color": fresh,
       "underlay-opacity": 0.3,
-      "underlay-padding": 15,
+      "underlay-padding": 14,
       opacity: 1,
       "z-index": 21,
     })

@@ -1,0 +1,588 @@
+/* Workspace pages: device manager, activity log and settings. */
+.page-scroll > * {
+  max-width: 1060px;
+}
+/* Shared page bits. */
+.manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.manager-head h2,
+.manager-head p {
+  margin: 0.1rem 0;
+}
+.tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-family: var(--mono);
+}
+.tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 13px;
+  border-radius: 7px;
+}
+.tabs button:hover {
+  color: var(--text);
+}
+.tabs button.active {
+  background: var(--chip);
+  color: var(--acc);
+  box-shadow: inset 0 0 0 1px var(--line2);
+}
+.pane {
+  min-height: 160px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  max-width: 720px;
+}
+.pane-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* Device manager. */
+.manager-toolbar {
+  position: sticky;
+  top: -2px;
+  z-index: 8;
+  padding: 10px 0;
+  background: linear-gradient(var(--bg) 88%, transparent);
+}
+.manager-filters {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, 1fr);
+  gap: 7px;
+}
+.field-mod {
+  cursor: text;
+}
+.field-mod input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+}
+.manager-filters select {
+  width: 100%;
+}
+.manager-subbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 9px 0;
+  font: 11px var(--mono);
+}
+.manager-subbar .check {
+  color: var(--muted);
+}
+.batch-bar {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 11px;
+}
+.batch-bar.has-selection {
+  display: flex;
+}
+.manager-list {
+  display: grid;
+  gap: 7px;
+  padding-bottom: 20px;
+}
+.manager-device {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.manager-device:hover {
+  border-color: var(--line2);
+}
+.manager-device[data-status="online"] {
+  border-left: 3px solid var(--ok);
+}
+.manager-device[data-status="suspected_offline"] {
+  border-left: 3px solid var(--warn);
+}
+.manager-device[data-status="offline"] {
+  border-left: 3px solid var(--muted);
+  opacity: 0.72;
+}
+.manager-device-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.manager-device-main > input {
+  flex: none;
+}
+.manager-device-main b,
+.manager-device-main small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manager-device-main small {
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+.manager-device-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.manager-device-actions button {
+  padding: 5px 9px;
+}
+.manager-actions-menu {
+  position: relative;
+}
+.manager-actions-menu summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 5px 9px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-sm);
+  background: var(--chip);
+  font: 600 11.5px var(--mono);
+}
+.manager-actions-menu summary::-webkit-details-marker {
+  display: none;
+}
+.manager-actions-menu[open] summary {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+.manager-actions-menu > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 12;
+  display: grid;
+  min-width: 150px;
+  padding: 6px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: var(--panel-solid);
+  box-shadow: 0 14px 36px #0004;
+}
+.manager-actions-menu > div button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 7px;
+}
+.manager-actions-menu > div button:hover {
+  background: var(--chip);
+  color: var(--acc);
+}
+.export-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  font: 11px var(--mono);
+  color: var(--muted);
+}
+.empty-state {
+  padding: 26px;
+  border: 1px dashed var(--line2);
+  border-radius: var(--r);
+  text-align: center;
+  color: var(--muted);
+}
+.empty-state b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+/* Activity. */
+.activity-head {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.activity-overview {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.activity-overview span {
+  display: grid;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+.activity-overview b {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-head > .mod {
+  align-self: center;
+}
+.activity-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-family: var(--mono);
+}
+.activity-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 13px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.activity-tabs button.active {
+  background: var(--chip);
+  color: var(--acc);
+  box-shadow: inset 0 0 0 1px var(--line2);
+}
+.activity-list {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  overflow: hidden;
+}
+.activity-item {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+}
+.activity-item:first-child {
+  border-top: 0;
+}
+.activity-item b,
+.activity-item small {
+  display: block;
+}
+.activity-item b {
+  font-size: 12.5px;
+}
+.activity-item small {
+  margin-top: 2px;
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+.activity-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+/* Settings page. */
+.settings-page {
+  max-width: 860px;
+}
+.settings-groups {
+  display: grid;
+  gap: 12px;
+}
+.settings-group {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+.settings-group-title {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.settings-group-title b {
+  font-size: 13.5px;
+}
+.settings-group-title small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.advanced-settings summary {
+  cursor: pointer;
+  list-style: none;
+}
+.advanced-settings summary::-webkit-details-marker {
+  display: none;
+}
+.advanced-settings summary > span {
+  display: grid;
+  gap: 2px;
+}
+.advanced-settings summary b {
+  font-size: 13.5px;
+}
+.advanced-settings summary small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.advanced-settings summary::after {
+  content: "+";
+  float: right;
+  color: var(--acc);
+  font-family: var(--mono);
+}
+.advanced-settings[open] summary::after {
+  content: "−";
+}
+.advanced-settings .formgrid {
+  margin-top: 12px;
+}
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+/* SNMP managed devices. */
+.snmp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.snmp-targets {
+  display: grid;
+  gap: 8px;
+}
+.snmp-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--chip);
+}
+.snmp-target.disabled {
+  opacity: 0.55;
+}
+.snmp-target > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.snmp-target b {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.snmp-target span {
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+.snmp-target small {
+  font: 10px var(--mono);
+}
+.snmp-target > div:last-child {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.snmp-target button {
+  padding: 5px 9px;
+}
+/* Notification pane extras. */
+.notification-events {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+.notification-test-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.notification-test-row p {
+  margin: 0;
+  font-size: 11px;
+}
+.notification-rule {
+  align-self: end;
+  margin: 0;
+  font-size: 10.5px;
+}
+/* Diagnostics and maintenance. */
+.scan-diagnostics {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 11.5px;
+}
+.scan-diagnostics p {
+  margin: 0.2rem 0 0.6rem;
+}
+.scan-diagnostics ul {
+  margin: 0.4rem 0;
+  padding-left: 1.2rem;
+}
+.scan-diagnostics li {
+  margin: 0.3rem 0;
+}
+.diagnostic-ok {
+  color: var(--ok);
+}
+.quality-tools button {
+  margin-top: 9px;
+}
+#maintenanceStatus {
+  font-size: 11px;
+}
+.vendor-database-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--chip);
+}
+.vendor-database-card div {
+  display: grid;
+}
+.vendor-database-card small {
+  color: var(--muted);
+}
+.vendor-database-card p {
+  grid-column: 1/-1;
+  margin: 0;
+  font-size: 11px;
+}
+/* Accounts. */
+.account-create {
+  padding: 14px;
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--chip);
+}
+.account-create h3 {
+  margin-top: 0;
+}
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+.role-preset {
+  margin: 10px 0 4px;
+}
+.account-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.account-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+}
+.account-row small {
+  display: block;
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+.account-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.account-actions .check {
+  font-size: 10.5px;
+}
+.account-actions button {
+  padding: 5px 9px;
+}
+/* Small screens. */
+@media (max-width: 700px) {
+  .manager-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .manager-device {
+    grid-template-columns: 1fr;
+  }
+  .manager-device-actions {
+    justify-content: flex-start;
+  }
+  .activity-head {
+    flex-direction: column;
+  }
+  .activity-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+  .activity-overview span:last-child {
+    grid-column: 1/-1;
+  }
+  .activity-head > .mod {
+    align-self: flex-start;
+  }
+  .formgrid,
+  .permission-grid,
+  .notification-events {
+    grid-template-columns: 1fr;
+  }
+  .account-row {
+    grid-template-columns: 1fr;
+  }
+  .tabs,
+  .activity-tabs {
+    display: flex;
+    overflow-x: auto;
+  }
+  .tabs button,
+  .activity-tabs button {
+    white-space: nowrap;
+  }
+}

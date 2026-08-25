@@ -84,7 +84,7 @@ function ensureQualityTools() {
     );
     document.querySelector("#refreshDiagnostics").onclick = loadScanDiagnostics;
   }
-  const toolbar = document.querySelector("#managerDialog .manager-toolbar");
+  const toolbar = document.querySelector("#pageDevices .manager-toolbar");
   if (toolbar && !document.querySelector("#deviceExport")) {
     toolbar.insertAdjacentHTML(
       "beforeend",
