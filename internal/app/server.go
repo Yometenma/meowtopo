@@ -34,6 +34,7 @@ type Server struct {
 	version         string
 	intervalUpdates chan time.Duration
 	notifier        *Notifier
+	vendors         *macVendorDatabase
 	backupMu        sync.Mutex
 }
 
@@ -53,9 +54,9 @@ func Run(version string) error {
 		return fmt.Errorf("读取已保存设置: %w", err)
 	}
 	hub := newHub()
-	srv := &Server{cfg: c, store: st, events: hub, version: version, intervalUpdates: make(chan time.Duration, 1)}
+	srv := &Server{cfg: c, store: st, events: hub, version: version, intervalUpdates: make(chan time.Duration, 1), vendors: openMACVendorDatabase(c.DataDir)}
 	srv.notifier = newNotifier(st)
-	srv.scanner = &Scanner{store: st, cfg: c, events: hub, notifier: srv.notifier}
+	srv.scanner = &Scanner{store: st, cfg: c, events: hub, notifier: srv.notifier, vendors: srv.vendors}
 	mux := http.NewServeMux()
 	srv.routes(mux)
 	h := securityHeaders(logRequests(mux))
@@ -129,6 +130,8 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("GET /api/settings", s.require(PermManageSettings, s.getSettings))
 	m.Handle("PATCH /api/settings", s.require(PermManageSettings, s.patchSettings))
 	m.Handle("POST /api/notifications/test", s.require(PermManageSettings, s.testNotification))
+	m.Handle("GET /api/vendor-database", s.require(PermManageSettings, s.vendorDatabaseStatus))
+	m.Handle("POST /api/vendor-database/update", s.require(PermManageSettings, s.updateVendorDatabase))
 	m.Handle("GET /api/backup", s.require(PermManageSettings, s.backup))
 	m.Handle("GET /api/maintenance", s.require(PermManageSettings, s.maintenanceStatus))
 	m.Handle("POST /api/maintenance/backup", s.require(PermManageSettings, s.createAutomaticBackup))
@@ -172,6 +175,20 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOut(w, 200, d)
+}
+
+func (s *Server) vendorDatabaseStatus(w http.ResponseWriter, r *http.Request) {
+	jsonOut(w, http.StatusOK, s.vendors.Status())
+}
+
+func (s *Server) updateVendorDatabase(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	if err := s.vendors.Update(ctx); err != nil {
+		fail(w, http.StatusBadGateway, "vendor_database_update_failed", err.Error())
+		return
+	}
+	jsonOut(w, http.StatusOK, s.vendors.Status())
 }
 func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 	id, e := idParam(r)
@@ -313,6 +330,14 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_request", e.Error())
 		return
 	}
+	var previous Device
+	if v.UserType != nil {
+		previous, e = s.store.device(id)
+		if e != nil {
+			fail(w, 404, "not_found", "设备不存在")
+			return
+		}
+	}
 	sets := []string{"updated_at=?"}
 	args := []any{now()}
 	if v.UserName != nil {
@@ -365,6 +390,12 @@ func (s *Server) patchDevice(w http.ResponseWriter, r *http.Request) {
 	if e != nil {
 		fail(w, 404, "not_found", "设备不存在")
 		return
+	}
+	if v.UserType != nil && d.UserType != previous.UserType {
+		if e = s.store.recordIdentificationCorrection(id, d.AutoType, d.UserType, d.TypeEvidence); e != nil {
+			fail(w, 500, "database_error", e.Error())
+			return
+		}
 	}
 	s.events.Emit("device_updated", d)
 	jsonOut(w, 200, d)

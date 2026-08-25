@@ -22,6 +22,9 @@ openDetail = function (id) {
         <small>自动识别仅供参考，你手工设置的类型始终优先。</small>
       </section>`);
   }
+  if (editTitle && device?.user_device_type && device.user_device_type !== device.auto_device_type) {
+    editTitle.insertAdjacentHTML('beforebegin', `<p class="device-correction">你已将自动识别的“${esc(typeLabel(device.auto_device_type))}”修正为“${esc(typeLabel(device.user_device_type))}”。喵拓会保留你的选择。</p>`);
+  }
   if (editTitle) {
     editTitle.insertAdjacentHTML('beforebegin', `
       <section class="history-card">
@@ -633,10 +636,54 @@ async function loadMaintenanceStatus() {
   } catch (error) { result.textContent = error.message; }
 }
 
+function ensureVendorDatabaseUI() {
+  const pane = document.querySelector('#aboutPane');
+  if (!pane || document.querySelector('#vendorDatabaseCard')) return;
+  pane.insertAdjacentHTML('beforeend', `
+    <section id="vendorDatabaseCard" class="settings-group vendor-database-card">
+      <div><b>MAC 厂商资料</b><small id="vendorDatabaseStatus">正在读取状态…</small></div>
+      <button type="button" id="vendorDatabaseUpdate">从 IEEE 官方更新</button>
+      <p class="muted">资料只保存在本机，用来识别网卡厂商；手机的随机 MAC 不参与厂商判断。</p>
+    </section>`);
+  document.querySelector('#vendorDatabaseUpdate').onclick = async () => {
+    const button = document.querySelector('#vendorDatabaseUpdate');
+    button.disabled = true;
+    button.textContent = '正在更新…';
+    try {
+      const status = await api('/api/vendor-database/update', {method: 'POST'});
+      showVendorDatabaseStatus(status);
+      toast(`厂商资料已更新，共 ${status.entries} 条`);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = '从 IEEE 官方更新';
+    }
+  };
+}
+
+function showVendorDatabaseStatus(status) {
+  const target = document.querySelector('#vendorDatabaseStatus');
+  if (!target) return;
+  target.textContent = status.available
+    ? `已有 ${status.entries} 条资料 · 更新于 ${new Date(status.updated_at).toLocaleString()}`
+    : '尚未下载，基础扫描不受影响';
+}
+
+async function refreshVendorDatabaseStatus() {
+  try {
+    showVendorDatabaseStatus(await api('/api/vendor-database'));
+  } catch (error) {
+    const target = document.querySelector('#vendorDatabaseStatus');
+    if (target) target.textContent = error.message;
+  }
+}
+
 const originalBind = bind;
 bind = function () {
   ensureMaintenanceUI();
   ensureQualityTools();
+  ensureVendorDatabaseUI();
   originalBind();
   ensureDashboardChrome();
   document.querySelector('#mobileSelectBtn').onclick = () => setMobileSelectionMode(!mobileSelectionMode);
@@ -661,7 +708,7 @@ bind = function () {
   });
   document.querySelector('#aboutTab').onclick = async () => {
     showPane('about');
-    const result = await api('/api/version');
+    const [result] = await Promise.all([api('/api/version'), refreshVendorDatabaseStatus()]);
     const value = result.version || 'dev';
     document.querySelector('#versionText').textContent = value.startsWith('dev-') ? `开发版 · ${value.slice(4)}` : value === 'dev' ? '开发版 · 本地构建' : `版本 ${value}`;
   };

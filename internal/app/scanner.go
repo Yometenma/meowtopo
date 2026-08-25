@@ -38,6 +38,7 @@ type Scanner struct {
 	cfg      Config
 	events   *EventHub
 	notifier *Notifier
+	vendors  *macVendorDatabase
 }
 
 func (s *Scanner) Status() ScanStatus { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
@@ -127,7 +128,11 @@ func (s *Scanner) run(nets []*net.IPNet) {
 					seenMu.Unlock()
 					host := lookupDeviceName(ip, sourceIP)
 					identification := identifyDevice(host, mac, result.OpenPorts, serviceEvidence[ip]...)
-					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host, mac), Type: identification.DeviceType, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
+					vendor := s.vendorFor(host, mac)
+					if vendor != "" {
+						identification.Evidence = append(identification.Evidence, "MAC 厂商："+vendor)
+					}
+					d, _ := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: vendor, Type: identification.DeviceType, Latency: result.Latency, ProbeMethod: result.Method, OpenPorts: result.OpenPorts, TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
 					s.events.Emit("device_seen", d)
 				}
 				s.mu.Lock()
@@ -169,7 +174,11 @@ sendLoop:
 		seen[ip] = true
 		host := lookupDeviceName(ip, sourceIP)
 		identification := identifyDevice(host, mac, nil, serviceEvidence[ip]...)
-		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: identifyVendor(host, mac), Type: identification.DeviceType, ProbeMethod: "arp", TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
+		vendor := s.vendorFor(host, mac)
+		if vendor != "" {
+			identification.Evidence = append(identification.Evidence, "MAC 厂商："+vendor)
+		}
+		d, err := s.store.upsertSeen(Discovery{IP: ip, MAC: mac, Hostname: host, Vendor: vendor, Type: identification.DeviceType, ProbeMethod: "arp", TypeSource: identification.Source, TypeConfidence: identification.Confidence, TypeEvidence: identification.Evidence})
 		if err != nil {
 			continue
 		}
@@ -199,6 +208,15 @@ sendLoop:
 	if s.notifier != nil {
 		go s.notifier.NotifyScan(st.StartedAt, st)
 	}
+}
+
+func (s *Scanner) vendorFor(host, mac string) string {
+	if s.vendors != nil {
+		if vendor := s.vendors.Lookup(mac); vendor != "" {
+			return vendor
+		}
+	}
+	return identifyVendor(host, mac)
 }
 
 func lookupDeviceName(ip string, sourceIP net.IP) string {

@@ -331,6 +331,34 @@ func TestDeviceHistorySummary(t *testing.T) {
 	}
 }
 
+func TestPatchDeviceRecordsTypeCorrectionOnce(t *testing.T) {
+	s := testServer(t)
+	d, err := s.store.upsertSeen(Discovery{IP: "192.168.9.30", Type: "linux", TypeConfidence: .6, TypeEvidence: []string{"开放端口：22 → Linux 设备"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patch := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, "/api/devices/id", strings.NewReader(`{"user_device_type":"nas"}`))
+		req.SetPathValue("id", fmt.Sprint(d.ID))
+		recorder := httptest.NewRecorder()
+		s.patchDevice(recorder, req)
+		return recorder
+	}
+	if recorder := patch(); recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if recorder := patch(); recorder.Code != http.StatusOK {
+		t.Fatalf("second status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var count int
+	if err = s.store.db.QueryRow(`SELECT COUNT(*) FROM identification_corrections WHERE device_id=?`, d.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("correction count=%d", count)
+	}
+}
+
 func TestStaticCacheControl(t *testing.T) {
 	for _, path := range []string{"/", "/index.html", "/app.js", "/features.js", "/style.css"} {
 		if got := staticCacheControl(path); !strings.Contains(got, "no-store") {

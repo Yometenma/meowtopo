@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -87,6 +88,24 @@ func TestImportantDeviceSurvivesDiscovery(t *testing.T) {
 	d, err = s.upsertSeen(Discovery{IP: "192.168.8.8", Type: "tv", TypeConfidence: .7})
 	if err != nil || !d.Important {
 		t.Fatalf("important flag lost: %+v err=%v", d, err)
+	}
+}
+
+func TestIdentificationCorrectionIsRecorded(t *testing.T) {
+	s := testStore(t)
+	d, err := s.upsertSeen(Discovery{IP: "192.168.9.20", Type: "linux", TypeConfidence: .6, TypeEvidence: []string{"开放端口：22 → Linux 设备"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.recordIdentificationCorrection(d.ID, d.AutoType, "nas", d.TypeEvidence); err != nil {
+		t.Fatal(err)
+	}
+	var automaticType, correctedType, evidence string
+	if err = s.db.QueryRow(`SELECT automatic_type,corrected_type,evidence FROM identification_corrections WHERE device_id=?`, d.ID).Scan(&automaticType, &correctedType, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if automaticType != "linux" || correctedType != "nas" || !strings.Contains(evidence, "22") {
+		t.Fatalf("correction=%q/%q evidence=%q", automaticType, correctedType, evidence)
 	}
 }
 
