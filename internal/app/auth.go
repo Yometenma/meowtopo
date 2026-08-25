@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
@@ -58,27 +59,6 @@ func randomToken(bytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func pbkdf2SHA256(password, salt []byte, iterations, length int) []byte {
-	result := make([]byte, 0, length)
-	for block := 1; len(result) < length; block++ {
-		mac := hmac.New(sha256.New, password)
-		mac.Write(salt)
-		mac.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
-		u := mac.Sum(nil)
-		t := append([]byte(nil), u...)
-		for i := 1; i < iterations; i++ {
-			mac = hmac.New(sha256.New, password)
-			mac.Write(u)
-			u = mac.Sum(nil)
-			for j := range t {
-				t[j] ^= u[j]
-			}
-		}
-		result = append(result, t...)
-	}
-	return result[:length]
-}
-
 func hashPassword(password string) (string, error) {
 	if err := validatePassword(password); err != nil {
 		return "", err
@@ -87,7 +67,7 @@ func hashPassword(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	hash := pbkdf2SHA256([]byte(password), salt, passwordIterations, 32)
+	hash := pbkdf2.Key([]byte(password), salt, passwordIterations, 32, sha256.New)
 	return fmt.Sprintf("pbkdf2-sha256$%d$%s$%s", passwordIterations, base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash)), nil
 }
 
@@ -105,7 +85,7 @@ func verifyPassword(encoded, password string) bool {
 	if err1 != nil || err2 != nil || len(salt) < 16 || len(want) != 32 {
 		return false
 	}
-	got := pbkdf2SHA256([]byte(password), salt, iterations, len(want))
+	got := pbkdf2.Key([]byte(password), salt, iterations, len(want), sha256.New)
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 

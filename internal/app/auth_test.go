@@ -2,11 +2,15 @@ package app
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func authRequest(mux http.Handler, method, path, body string, cookie *http.Cookie, csrf string) *httptest.ResponseRecorder {
@@ -124,6 +128,14 @@ func TestPasswordHashIsSaltedAndVerifiable(t *testing.T) {
 	}
 	if !verifyPassword(hash, "correct-horse-battery") || verifyPassword(hash, "wrong-password") {
 		t.Fatal("password verification failed")
+	}
+}
+
+func TestPBKDF2MatchesReferenceVector(t *testing.T) {
+	got := pbkdf2.Key([]byte("password"), []byte("salt"), 1, 32, sha256.New)
+	const want = "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"
+	if hex.EncodeToString(got) != want {
+		t.Fatalf("pbkdf2-sha256 output=%s want=%s", hex.EncodeToString(got), want)
 	}
 }
 
