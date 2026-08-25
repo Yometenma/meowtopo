@@ -13,37 +13,52 @@
 .manager-head p {
   margin: 0.1rem 0;
 }
-.tabs {
+.tabs,
+.activity-tabs {
   display: inline-flex;
   gap: 4px;
   padding: 4px;
   margin-bottom: 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-1);
   font-family: var(--mono);
 }
-.tabs button {
+.tabs button,
+.activity-tabs button {
   border: 0;
   background: transparent;
   color: var(--muted);
   padding: 6px 13px;
-  border-radius: 7px;
+  border-radius: 8px;
+  box-shadow: none;
+  font-size: 11.5px;
 }
-.tabs button:hover {
+.tabs button:hover,
+.activity-tabs button:hover {
   color: var(--text);
+  box-shadow: none;
+  translate: 0;
 }
-.tabs button.active {
-  background: var(--chip);
+.tabs button.active,
+.activity-tabs button.active {
+  background: linear-gradient(160deg, var(--acc-soft), transparent 140%),
+    var(--chip);
   color: var(--acc);
-  box-shadow: inset 0 0 0 1px var(--line2);
+  box-shadow:
+    inset 0 0 0 1px var(--ring),
+    var(--shadow-1);
 }
 .pane {
   min-height: 160px;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--panel);
+  background: linear-gradient(170deg, var(--panel-hi), var(--panel-solid) 26%);
+  box-shadow: var(--shadow-1);
   max-width: 720px;
 }
 .pane-actions {
@@ -54,10 +69,18 @@
 /* Device manager. */
 .manager-toolbar {
   position: sticky;
-  top: -2px;
+  top: 6px;
   z-index: 8;
-  padding: 10px 0;
-  background: linear-gradient(var(--bg) 88%, transparent);
+  padding: 11px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    var(--shadow-1);
 }
 .manager-filters {
   display: grid;
@@ -82,7 +105,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 9px 0;
+  margin-top: 9px;
   font: 11px var(--mono);
 }
 .manager-subbar .check {
@@ -94,9 +117,10 @@
   gap: 7px;
   flex-wrap: wrap;
   padding: 8px;
-  border: 1px solid var(--line);
+  margin-top: 9px;
+  border: 1px solid var(--ring);
   border-radius: 10px;
-  background: var(--panel);
+  background: var(--acc-soft);
   font-size: 11px;
 }
 .batch-bar.has-selection {
@@ -104,7 +128,7 @@
 }
 .manager-list {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   padding-bottom: 20px;
 }
 .manager-device {
@@ -112,15 +136,21 @@
   grid-template-columns: minmax(200px, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 9px 13px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--panel);
+  border-radius: 12px;
+  background: linear-gradient(170deg, var(--panel-hi), var(--panel-solid) 30%);
+  box-shadow: var(--shadow-1);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    translate 0.15s;
 }
 .manager-device:hover {
   border-color: var(--line2);
+  translate: 0 -1px;
+  box-shadow: var(--shadow-2);
 }
 .manager-device[data-status="online"] {
   border-left: 3px solid var(--ok);
@@ -135,7 +165,7 @@
 .manager-device-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   min-width: 0;
 }
 .manager-device-main > input {
@@ -147,6 +177,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.manager-device-main b {
+  font-size: 13px;
 }
 .manager-device-main small {
   color: var(--muted);
@@ -170,7 +203,8 @@
   padding: 5px 9px;
   border: 1px solid var(--line2);
   border-radius: var(--r-sm);
-  background: var(--chip);
+  background: linear-gradient(var(--panel-hi), var(--chip));
+  box-shadow: var(--shadow-1);
   font: 600 11.5px var(--mono);
 }
 .manager-actions-menu summary::-webkit-details-marker {
@@ -189,19 +223,24 @@
   min-width: 150px;
   padding: 6px;
   border: 1px solid var(--line2);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--panel-solid);
-  box-shadow: 0 14px 36px #0004;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-pop);
 }
 .manager-actions-menu > div button {
   border: 0;
   background: transparent;
   text-align: left;
-  border-radius: 7px;
+  border-radius: 8px;
+  box-shadow: none;
 }
 .manager-actions-menu > div button:hover {
-  background: var(--chip);
+  background: var(--acc-soft);
   color: var(--acc);
+  box-shadow: none;
+  translate: 0;
 }
 .export-actions {
   display: flex;
@@ -212,7 +251,7 @@
   color: var(--muted);
 }
 .empty-state {
-  padding: 26px;
+  padding: 28px;
   border: 1px dashed var(--line2);
   border-radius: var(--r);
   text-align: center;
@@ -238,17 +277,19 @@
 }
 .activity-overview span {
   display: grid;
-  padding: 11px 14px;
+  padding: 12px 15px;
   border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--panel);
+  border-radius: 12px;
+  background: linear-gradient(170deg, var(--panel-hi), var(--panel-solid) 30%);
+  box-shadow: var(--shadow-1);
   color: var(--muted);
   font: 10.5px var(--mono);
 }
 .activity-overview b {
   color: var(--text);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.25;
+  letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -257,41 +298,26 @@
   align-self: center;
 }
 .activity-tabs {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
   margin-bottom: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  font-family: var(--mono);
-}
-.activity-tabs button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  padding: 6px 13px;
-  border-radius: 7px;
-  font-size: 11.5px;
-}
-.activity-tabs button.active {
-  background: var(--chip);
-  color: var(--acc);
-  box-shadow: inset 0 0 0 1px var(--line2);
 }
 .activity-list {
   display: grid;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--panel);
+  background: linear-gradient(170deg, var(--panel-hi), var(--panel-solid) 22%);
+  box-shadow: var(--shadow-1);
   overflow: hidden;
 }
 .activity-item {
-  padding: 10px 14px;
+  padding: 11px 15px;
   border-top: 1px solid var(--line);
+  transition: background 0.12s;
 }
 .activity-item:first-child {
   border-top: 0;
+}
+.activity-item:hover {
+  background: var(--acc-soft);
 }
 .activity-item b,
 .activity-item small {
@@ -306,7 +332,7 @@
   font: 10.5px var(--mono);
 }
 .activity-empty {
-  padding: 24px;
+  padding: 26px;
   text-align: center;
   color: var(--muted);
   font-size: 12px;
@@ -320,10 +346,11 @@
   gap: 12px;
 }
 .settings-group {
-  padding: 16px;
+  padding: 17px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--panel);
+  background: linear-gradient(170deg, var(--panel-hi), var(--panel-solid) 26%);
+  box-shadow: var(--shadow-1);
 }
 .settings-group-title {
   display: grid;
@@ -393,7 +420,8 @@
   padding: 10px 13px;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: var(--chip);
+  background: linear-gradient(170deg, var(--chip-hi), var(--chip));
+  box-shadow: var(--shadow-1);
 }
 .snmp-target.disabled {
   opacity: 0.55;
@@ -446,10 +474,11 @@
 }
 /* Diagnostics and maintenance. */
 .scan-diagnostics {
-  padding: 12px;
+  padding: 13px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--chip);
+  border-radius: 11px;
+  background: linear-gradient(170deg, var(--chip-hi), var(--chip));
+  box-shadow: var(--shadow-1);
   font-size: 11.5px;
 }
 .scan-diagnostics p {
@@ -480,7 +509,8 @@
   padding: 13px;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: var(--chip);
+  background: linear-gradient(170deg, var(--chip-hi), var(--chip));
+  box-shadow: var(--shadow-1);
 }
 .vendor-database-card div {
   display: grid;
@@ -495,11 +525,12 @@
 }
 /* Accounts. */
 .account-create {
-  padding: 14px;
+  padding: 15px;
   margin: 16px 0;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--chip);
+  background: linear-gradient(170deg, var(--chip-hi), var(--chip));
+  box-shadow: var(--shadow-1);
 }
 .account-create h3 {
   margin-top: 0;
@@ -523,10 +554,11 @@
   grid-template-columns: minmax(160px, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 11px 13px;
+  padding: 11px 14px;
   border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--panel);
+  border-radius: 12px;
+  background: linear-gradient(170deg, var(--panel-hi), var(--panel-solid) 30%);
+  box-shadow: var(--shadow-1);
 }
 .account-row small {
   display: block;

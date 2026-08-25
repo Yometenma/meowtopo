@@ -3,6 +3,9 @@ function cssVar(name, fallback) {
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue(name)
     .trim();
+  // Cytoscape's color parser rejects 8-digit hex alpha; opacity props
+  // already carry the alpha, so normalize to 6-digit hex.
+  if (/^#[0-9a-f]{8}$/i.test(value)) return value.slice(0, 7);
   return value || fallback;
 }
 function themeColors() {
@@ -233,7 +236,8 @@ function applyIconStyle() {
       width: 112,
       height: 112,
       "background-color": c.win,
-      "border-width": 0,
+      "border-width": 2.5,
+      "border-color": c.line,
       "background-image": "data(art)",
       "background-image-opacity": 1,
       "background-width": "auto",
@@ -258,48 +262,53 @@ function applyIconStyle() {
       "text-border-width": 1,
       "text-border-opacity": 1,
       "underlay-shape": "ellipse",
-      "underlay-padding": 5,
+      "underlay-padding": 6,
     })
     .selector('node[status="online"]')
     .style({
-      "background-color": c.win,
-      "border-width": 0,
+      "border-color": c.ok,
       "underlay-color": c.ok,
-      "underlay-opacity": 0.14,
+      "underlay-opacity": 0.2,
     })
     .selector('node[status="suspected_offline"]')
     .style({
-      "background-color": c.win,
-      "border-width": 0,
+      "border-color": c.warn,
       "underlay-color": c.warn,
-      "underlay-opacity": 0.16,
+      "underlay-opacity": 0.22,
     })
     .selector('node[status="offline"]')
     .style({
-      "background-color": c.win,
-      "border-width": 0,
+      "border-color": c.muted,
       "underlay-color": c.muted,
       "underlay-opacity": 0.1,
+      opacity: 0.55,
     })
     .selector('node[status="unknown"]')
     .style({
-      "background-color": c.win,
-      "border-width": 0,
+      "border-color": c.line,
       "underlay-color": c.muted,
       "underlay-opacity": 0.08,
     })
     .selector('node[isnew="true"]')
     .style({
       "underlay-color": c.fresh,
-      "underlay-opacity": 0.24,
+      "underlay-opacity": 0.26,
       "underlay-padding": 8,
+    })
+    .selector('node[important="true"]')
+    .style({
+      width: 128,
+      height: 128,
+      "font-size": 11,
     })
     .selector('node[type="gateway"],node[type="router"],node[type="internet"]')
     .style({
-      width: 126,
-      height: 126,
-      "background-color": c.win,
-      "border-width": 0,
+      width: 128,
+      height: 128,
+    })
+    .selector('node[type="internet"]')
+    .style({
+      "border-color": c.info,
     })
     .selector("node.found")
     .style({
@@ -331,6 +340,7 @@ function elements() {
           art: deviceArtwork(type, dark),
           status: d.status,
           isnew: String(d.is_new),
+          important: String(!!d.is_important),
           type,
         },
         position: d.x || d.y ? { x: d.x, y: d.y } : undefined,

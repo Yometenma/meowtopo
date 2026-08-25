@@ -1,13 +1,29 @@
-/* Topology canvas, floating overlays and the device drawer. */
+/* Topology canvas, floating glass overlays and the device drawer. */
 .stage {
   position: relative;
   height: 100%;
-  background: radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0);
-  background-size: 24px 24px;
+  background:
+    radial-gradient(720px 480px at 50% 42%, var(--ring), transparent 68%),
+    radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0);
+  background-size:
+    100% 100%,
+    24px 24px;
 }
 #cy {
   position: absolute;
   inset: 0;
+}
+.canvas-toolbar,
+.legend,
+.selection-bar,
+.progress {
+  background: var(--panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    var(--shadow-1);
 }
 .canvas-toolbar {
   position: absolute;
@@ -15,28 +31,27 @@
   top: 12px;
   z-index: 9;
   display: flex;
-  gap: 5px;
+  gap: 4px;
   padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border-radius: 11px;
 }
 .canvas-toolbar button {
   display: flex;
   align-items: center;
   gap: 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
   padding: 5px 9px;
   font-size: 11px;
+  box-shadow: none;
 }
 .canvas-toolbar button:hover {
-  background: var(--chip);
+  background: var(--acc-soft);
   color: var(--acc);
+  box-shadow: none;
+  translate: 0;
 }
 .canvas-toolbar svg {
   width: 15px;
@@ -63,12 +78,8 @@
   z-index: 9;
   display: flex;
   gap: 12px;
-  padding: 7px 13px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  padding: 8px 14px;
+  border-radius: 11px;
   font: 10.5px var(--mono);
   color: var(--muted);
   white-space: nowrap;
@@ -98,15 +109,11 @@
   gap: 6px;
   transform: translateX(-50%);
   padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border-radius: 11px;
 }
 .selection-bar b {
   padding: 0 8px;
-  font: 600 11px var(--mono);
+  font: 700 11px var(--mono);
   white-space: nowrap;
 }
 .selection-bar button {
@@ -119,12 +126,8 @@
   transform: translateX(-50%);
   z-index: 10;
   width: min(420px, calc(100% - 28px));
-  padding: 9px 13px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  padding: 10px 14px;
+  border-radius: 11px;
   font: 11px var(--mono);
 }
 .progress div {
@@ -137,7 +140,8 @@
 }
 .progress progress {
   width: 100%;
-  margin-top: 5px;
+  height: 6px;
+  margin-top: 6px;
   accent-color: var(--acc);
 }
 .empty {
@@ -155,8 +159,9 @@
   pointer-events: auto;
 }
 .empty-kaomoji {
-  font: 26px var(--mono);
+  font: 28px var(--mono);
   color: var(--acc);
+  text-shadow: 0 0 24px var(--acc);
 }
 .empty h2 {
   margin: 0;
@@ -174,22 +179,29 @@
   display: grid;
   min-width: 180px;
   padding: 6px;
-  border: 1px solid var(--line2);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--panel-solid);
-  box-shadow: 0 14px 36px #0004;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line2);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    var(--shadow-pop);
   font-family: var(--mono);
 }
 .topology-menu button {
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   padding: 7px 9px;
   text-align: left;
+  box-shadow: none;
 }
 .topology-menu button:hover {
-  background: var(--chip);
+  background: var(--acc-soft);
   color: var(--acc);
+  box-shadow: none;
+  translate: 0;
 }
 .topology-menu-title {
   max-width: 230px;
@@ -210,15 +222,16 @@
   z-index: 25;
   pointer-events: none;
   border: 1px solid var(--acc);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--ring);
+  box-shadow: 0 0 18px var(--ring);
 }
 .mobile-select-button {
   display: none !important;
 }
 .mobile-select-button.active {
   color: var(--acc) !important;
-  background: var(--ring) !important;
+  background: var(--acc-soft) !important;
 }
 @media (max-width: 700px) {
   .mobile-select-button:not(.hidden) {
@@ -233,38 +246,48 @@
   z-index: 12;
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   padding: 0;
-  border: 1px solid var(--line2);
-  border-radius: 12px;
-  background: var(--acc);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: linear-gradient(150deg, var(--acc), var(--acc2));
   color: var(--acc-text);
-  font-size: 22px;
+  font-size: 23px;
   line-height: 1;
-  box-shadow: 0 10px 26px #0003;
+  box-shadow:
+    inset 0 1px 0 #ffffff44,
+    var(--glow-acc),
+    var(--shadow-2);
 }
 .fab:hover {
-  filter: brightness(1.07);
+  filter: brightness(1.08);
+  translate: 0 -2px;
+  box-shadow:
+    inset 0 1px 0 #ffffff44,
+    var(--glow-acc),
+    var(--shadow-pop);
 }
-/* Device drawer. */
+/* Device drawer: the heaviest glass in the app. */
 .drawer {
   position: fixed;
   right: 12px;
-  top: 66px;
+  top: 68px;
   bottom: 12px;
   z-index: 25;
-  width: min(380px, 94vw);
-  padding: 18px;
+  width: min(384px, 94vw);
+  padding: 20px;
   overflow: auto;
   border: 1px solid var(--line2);
   border-radius: var(--r);
   background: var(--panel);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  box-shadow: 0 18px 48px #0004;
-  transform: translateX(calc(100% + 16px));
-  transition: transform 0.22s ease;
+  backdrop-filter: blur(30px) saturate(1.6);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    var(--shadow-pop);
+  transform: translateX(calc(100% + 18px));
+  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0.24, 1);
 }
 .drawer.open {
   transform: none;
@@ -280,7 +303,7 @@
   color: var(--bad);
 }
 .drawer h3 {
-  margin: 18px 0 7px;
+  margin: 20px 0 8px;
   color: var(--acc);
   font: 700 10.5px var(--mono);
   letter-spacing: 0.1em;
@@ -291,17 +314,19 @@
 }
 .device-title {
   display: flex;
-  gap: 12px;
+  gap: 13px;
   align-items: center;
   margin-bottom: 14px;
 }
 .device-title .device-icon {
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
 }
 .device-title h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
+  letter-spacing: -0.01em;
 }
 .device-title .muted {
   font: 10.5px var(--mono);
@@ -309,9 +334,9 @@
 .detail-grid {
   display: grid;
   grid-template-columns: 86px 1fr;
-  gap: 5px 12px;
+  gap: 6px 12px;
   margin: 0;
-  padding-top: 12px;
+  padding-top: 13px;
   border-top: 1px solid var(--line);
   font-size: 11.5px;
 }
@@ -330,7 +355,7 @@
 .drawer-actions {
   display: flex;
   gap: 7px;
-  margin-top: 15px;
+  margin-top: 16px;
   flex-wrap: wrap;
 }
 .identification-card,
@@ -338,10 +363,11 @@
 .attention-setting,
 .connection-list {
   margin: 14px 0;
-  padding: 12px;
+  padding: 13px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--chip);
+  border-radius: 11px;
+  background: linear-gradient(170deg, var(--chip-hi), var(--chip));
+  box-shadow: var(--shadow-1);
 }
 .identification-card h3,
 .history-card h3,
@@ -363,10 +389,11 @@
   font-size: 10.5px;
 }
 .device-correction {
-  padding: 9px 11px;
+  padding: 10px 12px;
   margin: 12px 0;
   border-radius: var(--r-sm);
-  background: var(--ring);
+  background: var(--acc-soft);
+  border: 1px solid var(--ring);
   font-size: 11.5px;
 }
 .device-warning {
@@ -394,7 +421,8 @@
   margin: 10px 0;
 }
 .history-summary b {
-  font: 700 15px var(--mono);
+  font: 700 16px var(--mono);
+  letter-spacing: -0.02em;
 }
 .history-summary span {
   font-size: 10px;
@@ -431,13 +459,14 @@
   position: absolute;
   z-index: 5;
   pointer-events: none;
-  padding: 4px 8px;
+  padding: 5px 9px;
   border: 1px solid var(--line2);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--panel-solid);
   color: var(--text);
   font: 10px var(--mono);
   white-space: nowrap;
+  box-shadow: var(--shadow-2);
 }
 .history-legend {
   display: flex;
@@ -456,7 +485,8 @@
   min-width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: var(--ring);
+  background: var(--acc-soft);
+  border: 1px solid var(--ring);
   color: var(--acc);
   font: 700 10.5px var(--mono);
 }
@@ -527,8 +557,8 @@
 .connection-guide article {
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--chip);
+  border-radius: 11px;
+  background: linear-gradient(170deg, var(--chip-hi), var(--chip));
 }
 .canvas-help-platforms section > b {
   font-size: 13px;

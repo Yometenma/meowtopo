@@ -16,7 +16,8 @@
   padding: 10px 0;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel-solid) 30%);
+  box-shadow: var(--shadow-1);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   z-index: 20;
@@ -25,16 +26,18 @@
   width: 36px;
   height: 36px;
   margin-bottom: 8px;
-  border-radius: 10px;
+  border-radius: 11px;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, var(--acc), var(--acc2));
+  background: linear-gradient(150deg, var(--acc), var(--acc2));
   color: var(--acc-text);
   font: 700 15px var(--mono);
   border: 0;
+  box-shadow: var(--glow-acc);
 }
 .dock-home:hover {
-  filter: brightness(1.06);
+  filter: brightness(1.08);
+  translate: 0 -1px;
 }
 .dock-nav {
   position: relative;
@@ -43,10 +46,16 @@
   display: grid;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 11px;
   background: transparent;
   color: var(--muted);
   padding: 0;
+  box-shadow: none;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .dock-nav svg {
   width: 19px;
@@ -60,11 +69,16 @@
 .dock-nav:hover {
   color: var(--text);
   background: var(--chip);
+  translate: 0 -1px;
 }
 .dock-nav.active {
   color: var(--acc);
-  background: var(--chip);
+  background: linear-gradient(160deg, var(--acc-soft), transparent 130%),
+    var(--chip);
   border-color: var(--line2);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    var(--shadow-1);
 }
 .dock-nav.active::before {
   content: "";
@@ -73,16 +87,17 @@
   width: 3px;
   height: 18px;
   border-radius: 2px;
-  background: var(--acc);
+  background: linear-gradient(var(--acc), var(--acc2));
+  box-shadow: 0 0 8px var(--acc);
 }
 .dock-tip {
   position: absolute;
   left: 50px;
   top: 50%;
   translate: 0 -50%;
-  padding: 4px 9px;
+  padding: 5px 10px;
   border: 1px solid var(--line2);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--panel-solid);
   color: var(--text);
   font: 11px var(--mono);
@@ -91,6 +106,7 @@
   pointer-events: none;
   transition: 0.15s;
   z-index: 30;
+  box-shadow: var(--shadow-2);
 }
 .dock-nav:hover .dock-tip,
 .dock-nav:focus-visible .dock-tip {
@@ -113,6 +129,12 @@
   border-radius: 50%;
   background: var(--ok);
   box-shadow: 0 0 0 4px var(--ring);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 7px transparent;
+  }
 }
 .sidebar-foot.disconnected .sidebar-pulse {
   background: var(--warn);
@@ -120,7 +142,7 @@
 /* Waybar. */
 main {
   display: grid;
-  grid-template-rows: 46px 1fr;
+  grid-template-rows: 48px 1fr;
   gap: var(--gap);
   min-width: 0;
   min-height: 0;
@@ -132,7 +154,8 @@ main {
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel-solid) 32%);
+  box-shadow: var(--shadow-1);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   font-family: var(--mono);
@@ -145,7 +168,7 @@ main {
 }
 .ws-title b {
   color: var(--acc);
-  font-weight: 600;
+  font-weight: 700;
 }
 .ws-cursor {
   color: var(--acc);
@@ -163,23 +186,33 @@ main {
 .mod {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
+  gap: 7px;
+  padding: 5px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
-  background: var(--chip);
+  background: linear-gradient(var(--chip-hi), var(--chip));
   color: var(--muted);
   font: inherit;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow: none;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    box-shadow 0.15s,
+    translate 0.15s;
 }
 .mod:hover {
   border-color: var(--line2);
   color: var(--text);
+  translate: 0 -1px;
+  box-shadow: var(--shadow-1);
 }
 .mod b {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.01em;
 }
 .mod .up {
   color: var(--ok);
@@ -201,14 +234,15 @@ main {
   flex: 1;
 }
 .mod-acc {
-  background: var(--acc);
-  border-color: var(--acc);
+  background: linear-gradient(150deg, var(--acc), var(--acc2));
+  border-color: transparent;
   color: var(--acc-text);
   font-weight: 700;
+  box-shadow: var(--glow-acc);
 }
 .mod-acc:hover {
   color: var(--acc-text);
-  filter: brightness(1.06);
+  filter: brightness(1.07);
 }
 .bar-search {
   cursor: text;
@@ -245,40 +279,48 @@ main {
 /* Tiled-window chrome used by the topology page. */
 .win {
   display: grid;
-  grid-template-rows: 34px 1fr;
+  grid-template-rows: 36px 1fr;
   height: 100%;
   border: 1px solid var(--line2);
   border-radius: var(--r);
   background: var(--win);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 .win-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 13px;
   border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel-hi), transparent);
   font: 11px var(--mono);
   color: var(--muted);
   min-width: 0;
 }
 .win-title .dots {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   flex: none;
 }
 .win-title .dots i {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--line2);
 }
-.win-title .dots i:first-child {
-  background: var(--acc);
+.win-title .dots i:nth-child(1) {
+  background: color-mix(in srgb, var(--bad) 72%, var(--line2));
+}
+.win-title .dots i:nth-child(2) {
+  background: color-mix(in srgb, var(--warn) 72%, var(--line2));
+}
+.win-title .dots i:nth-child(3) {
+  background: color-mix(in srgb, var(--ok) 78%, var(--line2));
 }
 .win-title b {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
 }
 .win-sep {
   color: var(--line2);
@@ -340,7 +382,7 @@ body:not([data-workspace="overview"]) .bar-search {
   }
   main {
     order: 1;
-    grid-template-rows: 44px 1fr;
+    grid-template-rows: 46px 1fr;
   }
   .bar {
     padding: 0 8px;
