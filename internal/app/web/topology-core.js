@@ -103,7 +103,7 @@ function initCy() {
         selector: "edge",
         style: {
           "curve-style": "taxi",
-          "taxi-direction": "auto",
+          "taxi-direction": "downward",
           "taxi-turn": 16,
           "taxi-turn-min-distance": 12,
           "line-style": "dashed",
@@ -371,20 +371,96 @@ function elements() {
     }));
   return [...nodes, ...edges];
 }
+// 计算一个"从上往下"的树坐标：根节点在上、子节点在下，父节点居中于其子节点上方。
+function computeVerticalTreePositions() {
+  const parentOf = {};
+  const childrenOf = {};
+  cy.edges().forEach((e) => {
+    const src = e.data("source");
+    const tgt = e.data("target");
+    parentOf[tgt] = src;
+    (childrenOf[src] = childrenOf[src] || []).push(tgt);
+  });
+
+  // 根：没有父节点的节点，internet 排最前。
+  const roots = cy.nodes()
+    .filter((n) => !parentOf[n.id()])
+    .map((n) => n.id())
+    .sort((a, b) => {
+      const ia = cy.$id(a).data("type") === "internet" ? 0 : 1;
+      const ib = cy.$id(b).data("type") === "internet" ? 0 : 1;
+      return ia - ib;
+    });
+
+  // 广度优先计算每层深度。
+  const depth = {};
+  const queue = [];
+  roots.forEach((id) => {
+    depth[id] = 0;
+    queue.push(id);
+  });
+  while (queue.length) {
+    const id = queue.shift();
+    (childrenOf[id] || []).forEach((kid) => {
+      if (depth[kid] === undefined) {
+        depth[kid] = depth[id] + 1;
+        queue.push(kid);
+      }
+    });
+  }
+
+  // 孤立节点（没有任何连接）放到最底层。
+  let maxDepth = 0;
+  Object.values(depth).forEach((d) => (maxDepth = Math.max(maxDepth, d)));
+  const orphans = cy.nodes().filter((n) => depth[n.id()] === undefined);
+  orphans.forEach((n) => {
+    maxDepth += 1;
+    depth[n.id()] = maxDepth;
+  });
+
+  // 自底向上分配 x：叶子从左到右排开，父节点取子节点 x 的平均值（居中）。
+  const xGap = 170;
+  const x = {};
+  let cursor = 0;
+  const assignX = (id) => {
+    if (x[id] !== undefined) return x[id];
+    const kids = childrenOf[id] || [];
+    if (!kids.length) {
+      x[id] = cursor * xGap;
+      cursor += 1;
+    } else {
+      let sum = 0;
+      kids.forEach((kid) => (sum += assignX(kid)));
+      x[id] = sum / kids.length;
+    }
+    return x[id];
+  };
+  roots.forEach((id) => assignX(id));
+  orphans.forEach((n) => {
+    x[n.id()] = cursor * xGap;
+    cursor += 1;
+  });
+
+  const yGap = 150;
+  const positions = {};
+  cy.nodes().forEach((n) => {
+    positions[n.id()] = {
+      x: x[n.id()] !== undefined ? x[n.id()] : 0,
+      y: (depth[n.id()] || 0) * yGap,
+    };
+  });
+  return positions;
+}
+
 function runTopologyLayout(animate = false, fitAfter = false) {
   if (!cy || !cy.nodes().length) return;
-  const roots = cy.nodes('[type="internet"]');
+  const positions = computeVerticalTreePositions();
   const layout = cy.layout({
-    name: "breadthfirst",
-    directed: true,
-    roots: roots.length ? roots : undefined,
-    grid: true,
-    spacingFactor: 1,
-    padding: 60,
+    name: "preset",
+    positions,
     animate,
-    animationDuration: 360,
-    avoidOverlap: true,
-    nodeDimensionsIncludeLabels: true,
+    animationDuration: 400,
+    padding: 60,
   });
   layout.on("layoutstop", () => {
     cy.nodes()
