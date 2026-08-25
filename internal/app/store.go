@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS notification_state(device_id INTEGER NOT NULL,event_t
 CREATE TABLE IF NOT EXISTS identification_corrections(id INTEGER PRIMARY KEY AUTOINCREMENT,device_id INTEGER NOT NULL,automatic_type TEXT NOT NULL,corrected_type TEXT NOT NULL,vendor TEXT NOT NULL DEFAULT '',evidence TEXT NOT NULL DEFAULT '[]',created_at TEXT NOT NULL,FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE COLLATE NOCASE,display_name TEXT NOT NULL,password_hash TEXT NOT NULL,permissions INTEGER NOT NULL DEFAULT 1,is_admin INTEGER NOT NULL DEFAULT 0,is_active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_login_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,csrf_token TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,last_seen_at TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS snmp_targets(id INTEGER PRIMARY KEY AUTOINCREMENT,address TEXT NOT NULL UNIQUE,port INTEGER NOT NULL DEFAULT 161,version TEXT NOT NULL DEFAULT '2c',community TEXT NOT NULL DEFAULT '',security_level TEXT NOT NULL DEFAULT 'noAuthNoPriv',username TEXT NOT NULL DEFAULT '',auth_protocol TEXT NOT NULL DEFAULT 'SHA',auth_password TEXT NOT NULL DEFAULT '',privacy_protocol TEXT NOT NULL DEFAULT 'AES',privacy_password TEXT NOT NULL DEFAULT '',enabled INTEGER NOT NULL DEFAULT 1,last_status TEXT NOT NULL DEFAULT '',last_error TEXT NOT NULL DEFAULT '',last_polled_at TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id); CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX IF NOT EXISTS idx_events_created ON status_events(created_at); CREATE INDEX IF NOT EXISTS idx_samples_device_time ON device_samples(device_id,checked_at);`
 	if _, err := s.db.Exec(q); err != nil {
@@ -122,7 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(current_ip); CREATE INDEX I
 	if err := s.ensureTableColumn("identification_corrections", "vendor", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2),(3),(4),(5),(6),(7)`)
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO schema_migrations(version) VALUES(1),(2),(3),(4),(5),(6),(7),(8)`)
 	return err
 }
 func (s *Store) ensureDeviceColumn(name, definition string) error {

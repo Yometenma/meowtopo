@@ -2,7 +2,10 @@ module github.com/Yometenma/meowtopo
 
 go 1.23.0
 
-require modernc.org/sqlite v1.34.5
+require (
+	github.com/gosnmp/gosnmp v1.42.1
+	modernc.org/sqlite v1.34.5
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

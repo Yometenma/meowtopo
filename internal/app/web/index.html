@@ -22,6 +22,7 @@
     <script defer src="/manager-activity-core.js"></script>
     <script defer src="/device-ui.js"></script>
     <script defer src="/settings-ui.js"></script>
+    <script defer src="/snmp-ui.js"></script>
     <script defer src="/topology-ui.js"></script>
     <script defer src="/features.js"></script>
     <script defer src="/app-bootstrap.js"></script>
@@ -232,6 +233,21 @@
               >
             </div>
           </details>
+          <section class="settings-group snmp-settings">
+            <div class="settings-group-title">
+              <b>受管网络设备与 LLDP</b
+              ><small>从支持 SNMP 的路由器、交换机或 AP 读取真实邻居和端口信息</small>
+            </div>
+            <p class="muted">
+              需要先在设备管理页面启用只读 SNMP。喵拓不会尝试默认密码，也不会修改设备配置。
+            </p>
+            <div class="snmp-toolbar">
+              <button type="button" id="snmpAdd">添加受管设备</button>
+              <button type="button" id="snmpPoll">立即读取全部设备</button>
+              <span id="snmpSummary" class="muted"></span>
+            </div>
+            <div id="snmpTargets" class="snmp-targets"></div>
+          </section>
         </div>
         <div id="backupPane" class="hidden pane">
           <p>备份包含设置、设备、拓扑关系和节点位置。</p>
@@ -256,6 +272,30 @@
             保存设置
           </button>
         </div>
+      </form>
+    </dialog>
+    <dialog id="snmpDialog" class="snmp-dialog">
+      <form method="dialog" id="snmpForm">
+        <div class="manager-head">
+          <div><h2 id="snmpDialogTitle">添加受管网络设备</h2><p class="muted">网页不会再次显示已经保存的认证密码。</p></div>
+          <button type="button" id="snmpClose">关闭</button>
+        </div>
+        <input id="snmpID" type="hidden" />
+        <div class="formgrid">
+          <label>设备 IP<input id="snmpAddress" inputmode="decimal" placeholder="192.168.1.2" required /></label>
+          <label>UDP 端口<input id="snmpPort" type="number" min="1" max="65535" value="161" required /></label>
+          <label>SNMP 版本<select id="snmpVersion"><option value="2c">v2c</option><option value="3">v3</option><option value="1">v1（旧设备）</option></select></label>
+          <label class="snmp-community">只读 Community<input id="snmpCommunity" type="password" autocomplete="new-password" /></label>
+          <label class="snmp-v3 hidden">用户名<input id="snmpUsername" autocomplete="off" /></label>
+          <label class="snmp-v3 hidden">安全级别<select id="snmpSecurity"><option value="authPriv">认证并加密（推荐）</option><option value="authNoPriv">仅认证</option><option value="noAuthNoPriv">无认证、无加密</option></select></label>
+          <label class="snmp-v3 snmp-auth hidden">认证算法<select id="snmpAuthProtocol"><option>SHA256</option><option>SHA</option><option>SHA224</option><option>SHA384</option><option>SHA512</option><option>MD5</option></select></label>
+          <label class="snmp-v3 snmp-auth hidden">认证密码<input id="snmpAuthPassword" type="password" autocomplete="new-password" /></label>
+          <label class="snmp-v3 snmp-privacy hidden">加密算法<select id="snmpPrivacyProtocol"><option>AES</option><option>AES192</option><option>AES256</option><option value="AES192C">AES192（Cisco 等）</option><option value="AES256C">AES256（Cisco 等）</option><option>DES</option></select></label>
+          <label class="snmp-v3 snmp-privacy hidden">加密密码<input id="snmpPrivacyPassword" type="password" autocomplete="new-password" /></label>
+          <label class="check"><input id="snmpEnabled" type="checkbox" checked />随常规扫描自动读取</label>
+        </div>
+        <p id="snmpFormError" class="error"></p>
+        <div class="dialog-actions"><button type="button" id="snmpCancel">取消</button><button value="default" id="snmpSave" class="primary">保存</button></div>
       </form>
     </dialog>
     <dialog id="manualDialog">

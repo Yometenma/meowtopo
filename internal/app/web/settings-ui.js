@@ -45,6 +45,7 @@ appExtensions.settingsOpened = async function () {
   document.querySelector("#setCIDR").placeholder =
     "多个网段用逗号分隔，例如 192.168.1.0/24,10.0.0.0/24";
   loadScanDiagnostics();
+  await appExtensions.snmpOpened();
 };
 
 function ensureMaintenanceUI() {

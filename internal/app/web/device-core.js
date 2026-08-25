@@ -124,7 +124,7 @@ function dateText(v) {
 }
 function probeLabel(v) {
   return (
-    { icmp: "ICMP", tcp_connect: "TCP", "icmp+tcp_connect": "ICMP + TCP" }[v] ||
+    { icmp: "ICMP", tcp_connect: "TCP", "icmp+tcp_connect": "ICMP + TCP", snmp: "SNMP" }[v] ||
     "—"
   );
 }

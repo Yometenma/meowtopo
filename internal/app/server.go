@@ -29,6 +29,7 @@ type Server struct {
 	intervalUpdates chan time.Duration
 	notifier        *Notifier
 	vendors         *macVendorDatabase
+	snmp            *SNMPDiscovery
 	backupMu        sync.Mutex
 }
 
@@ -50,7 +51,9 @@ func Run(version string) error {
 	hub := newHub()
 	srv := &Server{cfg: c, store: st, events: hub, version: version, intervalUpdates: make(chan time.Duration, 1), vendors: openMACVendorDatabase(c.DataDir)}
 	srv.notifier = newNotifier(st)
+	srv.snmp = newSNMPDiscovery(st)
 	srv.scanner = &Scanner{store: st, cfg: c, events: hub, notifier: srv.notifier, vendors: srv.vendors}
+	srv.scanner.snmp = srv.snmp
 	mux := http.NewServeMux()
 	srv.routes(mux)
 	h := securityHeaders(logRequests(mux))
@@ -126,6 +129,12 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.Handle("POST /api/notifications/test", s.require(PermManageSettings, s.testNotification))
 	m.Handle("GET /api/vendor-database", s.require(PermManageSettings, s.vendorDatabaseStatus))
 	m.Handle("POST /api/vendor-database/update", s.require(PermManageSettings, s.updateVendorDatabase))
+	m.Handle("GET /api/snmp/targets", s.require(PermManageSettings, s.listSNMPTargets))
+	m.Handle("POST /api/snmp/targets", s.require(PermManageSettings, s.createSNMPTarget))
+	m.Handle("PATCH /api/snmp/targets/{id}", s.require(PermManageSettings, s.updateSNMPTarget))
+	m.Handle("DELETE /api/snmp/targets/{id}", s.require(PermManageSettings, s.deleteSNMPTarget))
+	m.Handle("POST /api/snmp/targets/{id}/test", s.require(PermManageSettings, s.testSNMPTarget))
+	m.Handle("POST /api/snmp/poll", s.require(PermManageSettings, s.pollSNMP))
 	m.Handle("GET /api/backup", s.require(PermManageSettings, s.backup))
 	m.Handle("GET /api/maintenance", s.require(PermManageSettings, s.maintenanceStatus))
 	m.Handle("POST /api/maintenance/backup", s.require(PermManageSettings, s.createAutomaticBackup))

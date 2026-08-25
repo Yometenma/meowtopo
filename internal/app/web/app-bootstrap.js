@@ -98,6 +98,7 @@ function bind() {
     }
   };
   appExtensions.bind();
+  appExtensions.snmpBind();
 }
 function showPane(v) {
   $("#settingsMain").classList.toggle("hidden", v !== "main");

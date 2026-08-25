@@ -101,8 +101,10 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.notifier = newNotifier(s.store)
+	s.snmp = newSNMPDiscovery(s.store)
 	s.scanner.store = s.store
 	s.scanner.notifier = s.notifier
+	s.scanner.snmp = s.snmp
 	jsonOut(w, http.StatusOK, map[string]string{"status": "restored", "message": "恢复完成"})
 }
 

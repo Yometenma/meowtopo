@@ -39,6 +39,7 @@ type Scanner struct {
 	events   *EventHub
 	notifier *Notifier
 	vendors  *macVendorDatabase
+	snmp     *SNMPDiscovery
 }
 
 func (s *Scanner) Status() ScanStatus { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
@@ -202,6 +203,13 @@ sendLoop:
 	s.events.Emit("scan_completed", st)
 	if s.notifier != nil {
 		go s.notifier.NotifyScan(st.StartedAt, st)
+	}
+	if s.snmp != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			_ = s.snmp.Poll(ctx)
+		}()
 	}
 }
 

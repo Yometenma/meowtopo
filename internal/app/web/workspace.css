@@ -16,6 +16,31 @@
   background: var(--bg);
   box-shadow: none;
 }
+
+.snmp-toolbar,
+.snmp-target,
+.snmp-target > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.snmp-toolbar { flex-wrap: wrap; }
+.snmp-targets { display: grid; gap: 0.7rem; margin-top: 0.8rem; }
+.snmp-target {
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.snmp-target.disabled { opacity: 0.58; }
+.snmp-target > div:first-child { display: grid; gap: 0.18rem; }
+.snmp-target span { color: var(--muted); font-size: 0.9rem; }
+.snmp-dialog { width: min(760px, calc(100vw - 2rem)); }
+@media (max-width: 640px) {
+  .snmp-target { align-items: stretch; flex-direction: column; }
+  .snmp-target > div:last-child { flex-wrap: wrap; }
+}
 .dashboard-shell #managerDialog::backdrop,
 .dashboard-shell #activityDialog::backdrop,
 .dashboard-shell #settingsDialog::backdrop,

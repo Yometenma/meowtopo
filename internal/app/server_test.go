@@ -82,7 +82,9 @@ func testServer(t *testing.T) *Server {
 	base := Config{ScanInterval: 5 * time.Minute, PingTimeout: 800 * time.Millisecond, TCPTimeout: 350 * time.Millisecond, Concurrency: 32, OfflineThreshold: 3, EnablePortScan: true}
 	s := &Server{store: store, events: events, intervalUpdates: make(chan time.Duration, 1)}
 	s.notifier = newNotifier(store)
+	s.snmp = newSNMPDiscovery(store)
 	s.scanner = &Scanner{store: store, cfg: base, events: events, notifier: s.notifier}
+	s.scanner.snmp = s.snmp
 	return s
 }
 
@@ -109,6 +111,9 @@ func TestRestoreRefreshesDatabaseUsers(t *testing.T) {
 	}
 	if s.scanner.store != s.store || s.scanner.notifier != s.notifier {
 		t.Fatal("scanner still uses pre-restore dependencies")
+	}
+	if s.snmp == nil || s.snmp.store != s.store || s.scanner.snmp != s.snmp {
+		t.Fatal("SNMP discovery still uses pre-restore dependencies")
 	}
 	if _, err := s.notifier.store.settings(); err != nil {
 		t.Fatalf("notification settings unavailable after restore: %v", err)
@@ -364,7 +369,7 @@ func TestStaticCacheControl(t *testing.T) {
 		"/", "/index.html",
 		"/app.js", "/topology-core.js", "/device-core.js", "/scan-settings-core.js",
 		"/manager-activity-core.js", "/device-ui.js", "/settings-ui.js", "/topology-ui.js",
-		"/features.js", "/app-bootstrap.js",
+		"/snmp-ui.js", "/features.js", "/app-bootstrap.js",
 		"/style.css", "/components.css", "/dashboard.css", "/polish.css", "/dialogs.css", "/workspace.css",
 	} {
 		if got := staticCacheControl(path); !strings.Contains(got, "no-store") {
