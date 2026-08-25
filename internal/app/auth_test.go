@@ -126,3 +126,35 @@ func TestPasswordHashIsSaltedAndVerifiable(t *testing.T) {
 		t.Fatal("password verification failed")
 	}
 }
+
+func TestLoginRateLimitPersists(t *testing.T) {
+	s := testStore(t)
+	ip := "203.0.113.9"
+	for i := 0; i < loginMaxFailures; i++ {
+		s.recordLogin(ip, false)
+	}
+	if !s.loginBlocked(ip) {
+		t.Fatal("expected IP to be blocked after repeated failures")
+	}
+	s.recordLogin(ip, true)
+	if s.loginBlocked(ip) {
+		t.Fatal("successful login should clear the block")
+	}
+}
+
+func TestLoginEndpointBlocksAfterFailures(t *testing.T) {
+	server := testServer(t)
+	mux := http.NewServeMux()
+	server.routes(mux)
+	if rec := authRequest(mux, http.MethodPost, "/api/auth/bootstrap", `{"username":"owner","displayName":"管理员","password":"correct-horse-battery"}`, nil, ""); rec.Code != http.StatusCreated {
+		t.Fatalf("bootstrap status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for i := 0; i < loginMaxFailures; i++ {
+		if rec := authRequest(mux, http.MethodPost, "/api/auth/login", `{"username":"owner","password":"wrong-password"}`, nil, ""); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong login status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	}
+	if rec := authRequest(mux, http.MethodPost, "/api/auth/login", `{"username":"owner","password":"correct-horse-battery"}`, nil, ""); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected block status=429 got=%d body=%s", rec.Code, rec.Body.String())
+	}
+}

@@ -145,3 +145,33 @@ func (s *Store) session(token string) (sessionUser, error) {
 func (s *Store) deleteSession(token string) {
 	_, _ = s.db.Exec(`DELETE FROM sessions WHERE token_hash=?`, hashSessionToken(token))
 }
+
+const (
+	loginMaxFailures = 5
+	loginBlockWindow = 10 * time.Minute
+)
+
+func (s *Store) loginBlocked(ip string) bool {
+	var blockedUntil string
+	if err := s.db.QueryRow(`SELECT blocked_until FROM login_attempts WHERE ip=?`, ip).Scan(&blockedUntil); err != nil {
+		return false
+	}
+	until, err := time.Parse(time.RFC3339, blockedUntil)
+	if err != nil {
+		return false
+	}
+	if time.Now().Before(until) {
+		return true
+	}
+	_, _ = s.db.Exec(`DELETE FROM login_attempts WHERE ip=?`, ip)
+	return false
+}
+
+func (s *Store) recordLogin(ip string, success bool) {
+	if success {
+		_, _ = s.db.Exec(`DELETE FROM login_attempts WHERE ip=?`, ip)
+		return
+	}
+	blockedUntil := time.Now().UTC().Add(loginBlockWindow).Format(time.RFC3339)
+	_, _ = s.db.Exec(`INSERT INTO login_attempts(ip,failures,blocked_until) VALUES(?,1,'') ON CONFLICT(ip) DO UPDATE SET failures=failures+1, blocked_until=CASE WHEN failures+1>=? THEN ? ELSE blocked_until END`, ip, loginMaxFailures, blockedUntil)
+}

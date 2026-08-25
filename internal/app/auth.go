@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 )
@@ -48,16 +47,6 @@ type sessionUser struct {
 }
 
 type authContextKey struct{}
-
-type loginAttempt struct {
-	Failures     int
-	BlockedUntil time.Time
-}
-
-var loginAttempts = struct {
-	sync.Mutex
-	items map[string]loginAttempt
-}{items: map[string]loginAttempt{}}
 
 var errAlreadyConfigured = errors.New("管理员已经创建")
 
@@ -157,34 +146,6 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func loginBlocked(ip string) bool {
-	loginAttempts.Lock()
-	defer loginAttempts.Unlock()
-	a := loginAttempts.items[ip]
-	if !a.BlockedUntil.IsZero() && time.Now().Before(a.BlockedUntil) {
-		return true
-	}
-	if !a.BlockedUntil.IsZero() {
-		delete(loginAttempts.items, ip)
-	}
-	return false
-}
-
-func recordLogin(ip string, success bool) {
-	loginAttempts.Lock()
-	defer loginAttempts.Unlock()
-	if success {
-		delete(loginAttempts.items, ip)
-		return
-	}
-	a := loginAttempts.items[ip]
-	a.Failures++
-	if a.Failures >= 5 {
-		a.BlockedUntil = time.Now().Add(10 * time.Minute)
-	}
-	loginAttempts.items[ip] = a
-}
-
 func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, maxAge int) {
 	cookie := &http.Cookie{Name: sessionCookie, Value: token, Path: "/", MaxAge: maxAge, HttpOnly: true, Secure: r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"), SameSite: http.SameSiteLaxMode}
 	if maxAge > 0 {
@@ -264,7 +225,7 @@ func (s *Server) bootstrapAdmin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
-	if loginBlocked(ip) {
+	if s.store.loginBlocked(ip) {
 		fail(w, http.StatusTooManyRequests, "login_blocked", "登录失败次数过多，请 10 分钟后再试")
 		return
 	}
@@ -278,11 +239,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	username, _ := normalizeUsername(v.Username)
 	u, hash, err := s.store.userByUsername(username)
 	if err != nil || !u.Active || !verifyPassword(hash, v.Password) {
-		recordLogin(ip, false)
+		s.store.recordLogin(ip, false)
 		fail(w, http.StatusUnauthorized, "invalid_credentials", "用户名或密码错误")
 		return
 	}
-	recordLogin(ip, true)
+	s.store.recordLogin(ip, true)
 	token, csrf, err := s.store.createSession(u.ID)
 	if err != nil {
 		fail(w, 500, "database_error", err.Error())
