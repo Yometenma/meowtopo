@@ -490,6 +490,41 @@
       </div>
       <div class="dialog-actions"><button id="logoutBtn">退出登录</button></div>
     </dialog>
+    <dialog id="resetPasswordDialog">
+      <form method="dialog" id="resetPasswordForm">
+        <div class="manager-head">
+          <div>
+            <h2>重置密码</h2>
+            <p class="muted" id="resetPasswordTarget">为该账户设置新密码。</p>
+          </div>
+          <button type="button" id="resetPasswordClose">关闭</button>
+        </div>
+        <label
+          >新密码<input
+            id="resetPassword"
+            type="password"
+            autocomplete="new-password"
+            required
+            minlength="10"
+            maxlength="128" /></label
+        ><label
+          >确认新密码<input
+            id="resetPasswordConfirm"
+            type="password"
+            autocomplete="new-password"
+            required
+            minlength="10"
+            maxlength="128"
+        /></label>
+        <p id="resetPasswordError" class="error"></p>
+        <div class="dialog-actions">
+          <button type="button" id="resetPasswordCancel">取消</button
+          ><button value="default" id="resetPasswordSave" class="primary">
+            保存新密码
+          </button>
+        </div>
+      </form>
+    </dialog>
     <button id="addBtn" class="fab" title="添加手工节点">＋</button>
   </body>
 </html>

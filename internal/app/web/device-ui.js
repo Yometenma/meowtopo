@@ -221,38 +221,134 @@ async function loadDeviceHistory(id, hours) {
         '<p class="muted">还没有历史数据，完成几次扫描后这里会出现曲线。</p>';
       return;
     }
-    const values = data.points.map((point) =>
-      point.status === "online" && point.latency_ms > 0
-        ? point.latency_ms
-        : null,
-    );
-    const maximum = Math.max(10, ...values.filter((value) => value !== null));
-    const width = 320,
-      height = 90,
-      step = values.length > 1 ? width / (values.length - 1) : width;
-    const segments = [];
-    let current = [];
-    values.forEach((value, index) => {
-      if (value === null) {
-        if (current.length) segments.push(current);
-        current = [];
-      } else {
-        current.push(
-          `${(index * step).toFixed(1)},${(height - (value / maximum) * (height - 12)).toFixed(1)}`,
-        );
-      }
-    });
-    if (current.length) segments.push(current);
-    const offline = values
-      .map((value, index) =>
-        value === null
-          ? `<rect x="${Math.max(0, index * step - 2)}" y="0" width="4" height="${height}" rx="2"/>`
-          : "",
-      )
-      .join("");
-    chart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="设备延迟历史"><g class="history-offline">${offline}</g>${segments.map((points) => `<polyline points="${points.join(" ")}"/>`).join("")}</svg><div class="history-legend"><span>绿色：延迟</span><span>红色：未在线</span></div>`;
+    renderHistoryChart(chart, data.points);
   } catch (error) {
     summary.textContent = error.message;
     chart.innerHTML = "";
   }
+}
+
+function renderHistoryChart(container, points) {
+  const items = points
+    .map((point) => {
+      const t = new Date(point.checked_at).getTime();
+      if (Number.isNaN(t)) return null;
+      const online = point.status === "online" && point.latency_ms > 0;
+      return {
+        t,
+        checkedAt: point.checked_at,
+        status: point.status,
+        latency: online ? point.latency_ms : null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.t - b.t);
+  if (!items.length) {
+    container.innerHTML = '<p class="muted">还没有可用的历史记录。</p>';
+    return;
+  }
+
+  const viewW = 340,
+    viewH = 112;
+  const margin = { left: 46, right: 10, top: 12, bottom: 24 };
+  const plotW = viewW - margin.left - margin.right;
+  const plotH = viewH - margin.top - margin.bottom;
+
+  let tMin = items[0].t,
+    tMax = items[items.length - 1].t;
+  if (tMax === tMin) {
+    tMin -= 30 * 60000;
+    tMax += 30 * 60000;
+  }
+  const span = tMax - tMin;
+  const x = (t) => margin.left + ((t - tMin) / span) * plotW;
+  const maxLatency = Math.max(10, ...items.map((item) => item.latency || 0));
+  const y = (v) => margin.top + plotH - (v / maxLatency) * plotH;
+
+  const stepPx = items.length > 1 ? plotW / (items.length - 1) : plotW;
+  const segments = [];
+  let current = [];
+  items.forEach((item) => {
+    if (item.latency === null) {
+      if (current.length) segments.push(current);
+      current = [];
+    } else {
+      current.push(`${x(item.t).toFixed(1)},${y(item.latency).toFixed(1)}`);
+    }
+  });
+  if (current.length) segments.push(current);
+
+  const offline = items
+    .filter((item) => item.latency === null)
+    .map((item) => {
+      const cx = x(item.t);
+      const w = Math.max(3, stepPx * 0.7);
+      return `<rect x="${(cx - w / 2).toFixed(1)}" y="${margin.top}" width="${w.toFixed(1)}" height="${plotH}" rx="2"/>`;
+    })
+    .join("");
+
+  const tickLabel = (t) => {
+    const d = new Date(t);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return span > 26 * 3600 * 1000
+      ? `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`
+      : `${hh}:${mm}`;
+  };
+
+  const axis = `<g class="history-axis">
+    <line x1="${margin.left}" y1="${margin.top}" x2="${viewW - margin.right}" y2="${margin.top}"/>
+    <text x="${margin.left - 6}" y="${margin.top + 3}" text-anchor="end">${maxLatency.toFixed(0)} ms</text>
+    <line x1="${margin.left}" y1="${margin.top + plotH}" x2="${viewW - margin.right}" y2="${margin.top + plotH}"/>
+    <text x="${margin.left - 6}" y="${margin.top + plotH + 3}" text-anchor="end">0</text>
+    <text x="${margin.left}" y="${viewH - 8}">${tickLabel(tMin)}</text>
+    <text x="${(margin.left + viewW - margin.right) / 2}" y="${viewH - 8}" text-anchor="middle">${tickLabel(tMin + span / 2)}</text>
+    <text x="${viewW - margin.right}" y="${viewH - 8}" text-anchor="end">${tickLabel(tMax)}</text>
+  </g>`;
+
+  container.style.position = "relative";
+  container.innerHTML =
+    `<svg viewBox="0 0 ${viewW} ${viewH}" role="img" aria-label="设备延迟历史">` +
+    `<g class="history-offline">${offline}</g>` +
+    `${axis}` +
+    segments.map((pts) => `<polyline points="${pts.join(" ")}"/>`).join("") +
+    `</svg>` +
+    `<div class="history-tooltip" hidden></div>` +
+    `<div class="history-legend"><span>绿色：延迟</span><span>红色：未在线</span></div>`;
+
+  const svg = container.querySelector("svg");
+  const tip = container.querySelector(".history-tooltip");
+  const statusLabel = {
+    online: "在线",
+    suspected_offline: "疑似离线",
+    offline: "离线",
+    unknown: "未知",
+  };
+  svg.addEventListener("mousemove", (event) => {
+    const rect = svg.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * viewW;
+    if (px < margin.left || px > viewW - margin.right) {
+      tip.hidden = true;
+      return;
+    }
+    const t = tMin + ((px - margin.left) / plotW) * span;
+    let nearest = items[0];
+    let best = Infinity;
+    for (const item of items) {
+      const distance = Math.abs(item.t - t);
+      if (distance < best) {
+        best = distance;
+        nearest = item;
+      }
+    }
+    const detail = nearest.latency !== null ? ` · ${nearest.latency.toFixed(1)} ms` : "";
+    tip.textContent = `${new Date(nearest.checkedAt).toLocaleString()} · ${statusLabel[nearest.status] || nearest.status}${detail}`;
+    const left = Math.min(Math.max(0, px - 70), rect.width - 150);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(0, event.clientY - rect.top - 34)}px`;
+    tip.hidden = false;
+  });
+  svg.addEventListener("mouseleave", () => {
+    tip.hidden = true;
+  });
 }

@@ -1,4 +1,21 @@
 /* Application bindings and startup. */
+let searchMatches = [];
+let searchIndex = 0;
+
+function focusSearchResult(announce = false) {
+  const id = searchMatches[searchIndex];
+  const device = devices.find((x) => x.id === id);
+  if (!device) return;
+  cy.nodes().removeClass("found");
+  const node = cy.$id(String(id));
+  node.addClass("found");
+  cy.animate({ center: { eles: node }, zoom: 1.4 }, { duration: 250 });
+  node.select();
+  if (announce && searchMatches.length > 1) {
+    toast(`搜索结果 ${searchIndex + 1}/${searchMatches.length} · ${nameOf(device)}`);
+  }
+}
+
 function bind() {
   $("#scanBtn").onclick = startScan;
   $("#manageBtn").onclick = openManager;
@@ -44,16 +61,26 @@ function bind() {
   };
   $("#search").oninput = (e) => {
     if (!cy) return;
-    const q = e.target.value.toLowerCase();
+    const q = e.target.value.trim().toLowerCase();
+    searchMatches = q
+      ? devices
+          .filter(
+            (x) =>
+              nameOf(x).toLowerCase().includes(q) ||
+              (x.current_ip || "").includes(q),
+          )
+          .map((x) => x.id)
+      : [];
+    searchIndex = 0;
     cy.nodes().removeClass("found");
-    const d = devices.find(
-      (x) => nameOf(x).toLowerCase().includes(q) || x.current_ip.includes(q),
-    );
-    if (d && q) {
-      const n = cy.$id(String(d.id));
-      cy.animate({ center: { eles: n }, zoom: 1.4 }, { duration: 250 });
-      n.select();
-    }
+    if (!searchMatches.length) return;
+    focusSearchResult();
+  };
+  $("#search").onkeydown = (e) => {
+    if (e.key !== "Enter" || !searchMatches.length) return;
+    e.preventDefault();
+    searchIndex = (searchIndex + 1) % searchMatches.length;
+    focusSearchResult(true);
   };
   $("#addBtn").onclick = () => $("#manualDialog").showModal();
   $("#manualSave").onclick = async (e) => {

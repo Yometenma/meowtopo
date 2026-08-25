@@ -188,19 +188,8 @@ async function renderAccounts() {
     .querySelectorAll("[data-account-password]")
     .forEach(
       (button) =>
-        (button.onclick = async () => {
-          const password = prompt("输入至少 10 个字符的新密码");
-          if (!password) return;
-          try {
-            await api(
-              `/api/users/${button.closest("[data-user]").dataset.user}`,
-              { method: "PATCH", body: JSON.stringify({ password }) },
-            );
-            toast("密码已重置，其他登录已退出");
-          } catch (e) {
-            toast(e.message);
-          }
-        }),
+        (button.onclick = () =>
+          openResetPassword(button.closest("[data-user]"))),
     );
 }
 async function openAccount() {
@@ -236,10 +225,40 @@ async function createAccount(e) {
     $("#accountCreateError").textContent = x.message;
   }
 }
+let resetPasswordUserID = null;
+function openResetPassword(row) {
+  resetPasswordUserID = +(row?.dataset.user || 0);
+  const label = row?.querySelector("b")?.textContent.trim() || "该账户";
+  $("#resetPasswordTarget").textContent = `为 ${label} 设置新密码。`;
+  $("#resetPassword").value = "";
+  $("#resetPasswordConfirm").value = "";
+  $("#resetPasswordError").textContent = "";
+  $("#resetPasswordDialog").showModal();
+}
 function bindAccount() {
   $("#accountBtn").onclick = openAccount;
   $("#accountClose").onclick = () => $("#accountDialog").close();
   $("#accountCreateForm").onsubmit = createAccount;
+  $("#resetPasswordClose").onclick = () => $("#resetPasswordDialog").close();
+  $("#resetPasswordCancel").onclick = () => $("#resetPasswordDialog").close();
+  $("#resetPasswordForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const password = $("#resetPassword").value;
+    if (password !== $("#resetPasswordConfirm").value) {
+      $("#resetPasswordError").textContent = "两次输入的密码不一致";
+      return;
+    }
+    try {
+      await api(`/api/users/${resetPasswordUserID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ password }),
+      });
+      $("#resetPasswordDialog").close();
+      toast("密码已重置，其他登录已退出");
+    } catch (x) {
+      $("#resetPasswordError").textContent = x.message;
+    }
+  };
   $("#newAdmin").onchange = (e) =>
     document.querySelectorAll(".permission-grid input").forEach((input) => {
       input.disabled = e.target.checked;

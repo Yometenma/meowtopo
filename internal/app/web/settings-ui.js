@@ -3,8 +3,7 @@ appExtensions.notificationValues = function () {
   return {
     notification_cooldown:
       document.querySelector("#notifyCooldown")?.value || "15m",
-    notification_important_only:
-      document.querySelector("#notifyImportantOnly")?.checked || false,
+    notification_important_only: true,
     automatic_backup_enabled:
       document.querySelector("#autoBackupEnabled")?.checked || false,
     automatic_backup_interval:
@@ -24,7 +23,7 @@ appExtensions.notificationUI = function () {
       .querySelector("#notificationResult")
       .insertAdjacentHTML(
         "beforebegin",
-        `<div class="formgrid notification-controls"><label>同类消息冷却时间<select id="notifyCooldown"><option value="0s">不限制</option><option value="5m">5 分钟</option><option value="15m">15 分钟</option><option value="1h">1 小时</option><option value="6h">6 小时</option></select></label><label class="check notification-rule"><input id="notifyImportantOnly" type="checkbox" checked disabled>离线与恢复只提醒长期在线设备</label></div>`,
+        `<div class="formgrid notification-controls"><label>同类消息冷却时间<select id="notifyCooldown"><option value="0s">不限制</option><option value="5m">5 分钟</option><option value="15m">15 分钟</option><option value="1h">1 小时</option><option value="6h">6 小时</option></select></label><p class="muted notification-rule">离线与恢复通知只针对标记为「长期在线」的设备，其他设备的变化不会触发提醒。</p></div>`,
       );
   }
 };
@@ -32,7 +31,6 @@ appExtensions.notificationUI = function () {
 appExtensions.settingsOpened = async function () {
   document.querySelector("#notifyCooldown").value =
     settings.notification_cooldown || "15m";
-  document.querySelector("#notifyImportantOnly").checked = true;
   document.querySelector("#autoBackupEnabled").checked =
     settings.automatic_backup_enabled === "true";
   document.querySelector("#autoBackupInterval").value =

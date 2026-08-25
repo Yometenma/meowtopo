@@ -345,6 +345,12 @@ function applyIconStyle() {
       "background-color": canvasBg,
       "border-width": 0,
     })
+    .selector("node.found")
+    .style({
+      "underlay-color": "#3aa7d6",
+      "underlay-opacity": 0.5,
+      "underlay-padding": 9,
+    })
     .update();
 }
 function nodeDisplay(d) {
