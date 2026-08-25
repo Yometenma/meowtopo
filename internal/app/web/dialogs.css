@@ -1,0 +1,357 @@
+/* Clear task dialogs: less scrolling, stronger hierarchy and simpler controls. */
+.dashboard-shell #managerDialog,
+.dashboard-shell #activityDialog {
+  width: min(920px, calc(100vw - 40px));
+  height: min(780px, calc(100dvh - 56px));
+  padding: 0;
+  overflow: hidden;
+}
+.dashboard-shell #accountDialog {
+  width: min(880px, calc(100vw - 40px));
+  max-height: calc(100dvh - 56px);
+}
+.dashboard-shell #settingsDialog {
+  width: min(760px, calc(100vw - 40px));
+}
+.dashboard-shell .manager-head {
+  position: sticky;
+  top: -26px;
+  z-index: 5;
+  margin: -26px -28px 16px;
+  padding: 24px 28px 16px;
+  background: color-mix(in srgb, var(--panel) 95%, transparent);
+  backdrop-filter: blur(12px);
+}
+.dashboard-shell .manager-head h2 {
+  margin: 0 0 3px;
+}
+.dashboard-shell .manager-head p {
+  font-size: 12px;
+}
+.dashboard-shell .manager-filters {
+  position: sticky;
+  top: 69px;
+  z-index: 4;
+  grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(120px, 1fr));
+  margin: 0 -2px 10px;
+  padding: 10px;
+  background: var(--panel);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--bg) 65%, transparent);
+}
+.dashboard-shell .manager-summary {
+  padding: 3px 4px 10px;
+  font-size: 12px;
+}
+.dashboard-shell .batch-bar {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-color: var(--line);
+}
+.dashboard-shell .batch-bar:not(.has-selection) > button,
+.dashboard-shell .batch-bar:not(.has-selection) > select {
+  display: none;
+}
+.dashboard-shell .manager-list {
+  gap: 5px;
+  margin-top: 0;
+}
+.dashboard-shell .manager-device {
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 11px;
+  cursor: pointer;
+}
+.dashboard-shell .manager-device:hover {
+  transform: none;
+}
+.dashboard-shell .manager-device-main .device-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.dashboard-shell .manager-device-actions button {
+  padding: 0.38rem 0.56rem;
+  font-size: 12px;
+}
+.dashboard-shell .manager-device-actions button[data-action="edit"] {
+  background: var(--mint2);
+}
+.dashboard-shell .manager-device-main .device-icon {
+  position: relative;
+}
+.dashboard-shell .manager-device-main .device-icon::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--gray);
+}
+.dashboard-shell .manager-device[data-status="online"] .device-icon::after {
+  background: #66c98e;
+}
+.dashboard-shell
+  .manager-device[data-status="suspected_offline"]
+  .device-icon::after {
+  background: var(--yellow);
+}
+.dashboard-shell .manager-device[data-status="offline"] .device-icon::after {
+  background: var(--gray);
+}
+.manager-actions-menu {
+  position: relative;
+}
+.manager-actions-menu summary {
+  list-style: none;
+  padding: 0.38rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 12px;
+  cursor: pointer;
+}
+.manager-actions-menu summary::-webkit-details-marker {
+  display: none;
+}
+.manager-actions-menu[open] summary {
+  border-color: var(--mint);
+  background: var(--mint2);
+}
+.manager-actions-menu > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  min-width: 150px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px #14271f2b;
+}
+.manager-actions-menu > div button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+.manager-actions-menu > div button:hover {
+  background: var(--mint2);
+  transform: none;
+}
+.dashboard-shell .activity-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: var(--bg);
+}
+.dashboard-shell .activity-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+}
+.dashboard-shell .activity-tabs button.active {
+  background: var(--panel);
+  box-shadow: 0 3px 12px #0001;
+  font-weight: 700;
+}
+.dashboard-shell .activity-columns {
+  display: block;
+  margin: 0;
+}
+.dashboard-shell .activity-list {
+  gap: 5px;
+}
+.dashboard-shell .activity-item {
+  position: relative;
+  padding: 11px 14px 11px 38px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.dashboard-shell .activity-item::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 17px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--mint) 14%, transparent);
+}
+.dashboard-shell .activity-item b {
+  font-size: 13px;
+}
+.dashboard-shell .activity-item small {
+  font-size: 12px;
+}
+.dialog-title h2,
+.dialog-title p {
+  margin: 0;
+}
+.dialog-title p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dashboard-shell .dialog-title {
+  margin-bottom: 16px;
+}
+.settings-groups {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+}
+.settings-group {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg) 68%, var(--panel));
+}
+.settings-group-title {
+  display: grid;
+  margin-bottom: 8px;
+}
+.settings-group-title b {
+  font-size: 14px;
+}
+.settings-group-title small,
+.advanced-settings summary small,
+.role-preset small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.advanced-settings summary {
+  cursor: pointer;
+  list-style: none;
+}
+.advanced-settings summary::-webkit-details-marker {
+  display: none;
+}
+.advanced-settings summary span {
+  display: inline-grid;
+}
+.advanced-settings summary::after {
+  content: "展开";
+  float: right;
+  color: var(--mint);
+  font-size: 12px;
+}
+.advanced-settings[open] summary::after {
+  content: "收起";
+}
+.advanced-settings[open] summary {
+  margin-bottom: 8px;
+}
+.notification-master {
+  border-color: color-mix(in srgb, var(--mint) 46%, var(--line));
+  background: color-mix(in srgb, var(--mint2) 52%, var(--panel));
+}
+.notification-events {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.notification-events label {
+  margin: 0 !important;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--panel);
+}
+.notification-test-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+.notification-test-row p {
+  margin: 0;
+}
+.role-preset {
+  max-width: 420px;
+  margin: 12px 0 !important;
+}
+.role-preset select {
+  width: 100%;
+}
+.dashboard-shell .permission-grid {
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--panel);
+}
+.dashboard-shell .account-create {
+  padding: 18px;
+}
+.dashboard-shell .account-row {
+  padding: 14px 16px;
+}
+.dashboard-shell .account-actions {
+  align-items: center;
+}
+.dashboard-shell .account-actions label {
+  padding: 5px 7px;
+  margin: 0;
+  border-radius: 8px;
+  background: var(--panel);
+}
+@media (max-width: 700px) {
+  .dashboard-shell #managerDialog,
+  .dashboard-shell #activityDialog,
+  .dashboard-shell #accountDialog,
+  .dashboard-shell #settingsDialog {
+    width: 100vw;
+    height: calc(100dvh - 64px);
+    max-height: none;
+    margin: 0 0 64px;
+    border-radius: 0;
+  }
+  .dashboard-shell .manager-head {
+    top: -20px;
+    margin: -20px -17px 12px;
+    padding: 18px 17px 13px;
+  }
+  .dashboard-shell .manager-filters {
+    position: static;
+    grid-template-columns: 1fr 1fr;
+  }
+  .dashboard-shell .manager-filters input {
+    grid-column: 1/-1;
+  }
+  .dashboard-shell .manager-device {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-shell .manager-device-actions {
+    padding-left: 48px;
+    justify-content: flex-start;
+  }
+  .dashboard-shell .permission-grid {
+    grid-template-columns: 1fr;
+  }
+  .settings-group {
+    padding: 13px;
+  }
+}
+@media (max-width: 700px) {
+  .notification-events {
+    grid-template-columns: 1fr;
+  }
+  .notification-test-row {
+    display: grid;
+  }
+  .manager-actions-menu > div {
+    right: auto;
+    left: 0;
+  }
+}

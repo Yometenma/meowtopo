@@ -360,7 +360,13 @@ func TestPatchDeviceRecordsTypeCorrectionOnce(t *testing.T) {
 }
 
 func TestStaticCacheControl(t *testing.T) {
-	for _, path := range []string{"/", "/index.html", "/app.js", "/features.js", "/style.css"} {
+	for _, path := range []string{
+		"/", "/index.html",
+		"/app.js", "/topology-core.js", "/device-core.js", "/scan-settings-core.js",
+		"/manager-activity-core.js", "/device-ui.js", "/settings-ui.js", "/topology-ui.js",
+		"/features.js", "/app-bootstrap.js",
+		"/style.css", "/components.css", "/dashboard.css", "/polish.css", "/dialogs.css", "/workspace.css",
+	} {
 		if got := staticCacheControl(path); !strings.Contains(got, "no-store") {
 			t.Fatalf("staticCacheControl(%q)=%q, want no-store", path, got)
 		}

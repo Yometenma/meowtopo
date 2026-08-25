@@ -1,22 +1,16 @@
 package app
 
 import (
-	"archive/zip"
-	"bytes"
-	"context"
 	"database/sql"
 	"embed"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -145,29 +139,6 @@ func (s *Server) routes(m *http.ServeMux) {
 	}))
 }
 
-func staticCacheControl(path string) string {
-	if path == "/" || path == "/index.html" || strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") {
-		return "no-cache, no-store, must-revalidate"
-	}
-	return "public, max-age=86400"
-}
-
-func idParam(r *http.Request) (int64, error) { return strconv.ParseInt(r.PathValue("id"), 10, 64) }
-func jsonOut(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-func fail(w http.ResponseWriter, status int, code, msg string) {
-	jsonOut(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
-}
-func decode(r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	return d.Decode(v)
-}
 func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 	d, e := s.store.devices()
 	if e != nil {
@@ -177,19 +148,6 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, d)
 }
 
-func (s *Server) vendorDatabaseStatus(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, http.StatusOK, s.vendors.Status())
-}
-
-func (s *Server) updateVendorDatabase(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
-	defer cancel()
-	if err := s.vendors.Update(ctx); err != nil {
-		fail(w, http.StatusBadGateway, "vendor_database_update_failed", err.Error())
-		return
-	}
-	jsonOut(w, http.StatusOK, s.vendors.Status())
-}
 func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 	id, e := idParam(r)
 	if e != nil {
@@ -827,249 +785,4 @@ func (s *Server) statusEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOut(w, 200, out)
-}
-func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
-	v, e := s.store.settings()
-	if e != nil {
-		fail(w, 500, "database_error", e.Error())
-		return
-	}
-	if v["notification_telegram_token"] != "" {
-		v["notification_telegram_token"] = "••••••••"
-	}
-	jsonOut(w, 200, v)
-}
-func (s *Server) testNotification(w http.ResponseWriter, r *http.Request) {
-	if s.notifier == nil {
-		s.notifier = newNotifier(s.store)
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	if err := s.notifier.SendTest(ctx); err != nil {
-		fail(w, 502, "notification_failed", err.Error())
-		return
-	}
-	jsonOut(w, 200, map[string]bool{"sent": true})
-}
-func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
-	var v map[string]any
-	if decode(r, &v) != nil {
-		fail(w, 400, "invalid_request", "设置格式无效")
-		return
-	}
-	if raw, ok := v["scan_cidrs"].(string); ok {
-		for _, c := range strings.Split(raw, ",") {
-			if _, _, e := validateCIDR(c); e != nil {
-				fail(w, 400, "invalid_cidr", e.Error())
-				return
-			}
-		}
-	}
-	if raw, ok := v["gateway_ip"].(string); ok && raw != "" {
-		ip := net.ParseIP(raw)
-		if ip == nil || ip.To4() == nil || !ip.IsPrivate() {
-			fail(w, 400, "invalid_gateway", "主网关必须是私有 IPv4 地址")
-			return
-		}
-	}
-	for key, bounds := range map[string][2]int{"automatic_backup_keep": {1, 30}, "history_retention_days": {7, 365}} {
-		if raw, ok := v[key].(float64); ok && (raw != float64(int(raw)) || int(raw) < bounds[0] || int(raw) > bounds[1]) {
-			fail(w, 400, "invalid_setting", "备份保留份数或历史保留天数超出范围")
-			return
-		}
-	}
-	if raw, ok := v["automatic_backup_interval"].(string); ok {
-		interval, parseErr := time.ParseDuration(raw)
-		if parseErr != nil || interval < 6*time.Hour || interval > 7*24*time.Hour {
-			fail(w, 400, "invalid_setting", "自动备份间隔必须在 6 小时到 7 天之间")
-			return
-		}
-	}
-	current, _ := s.store.settings()
-	for key, value := range v {
-		if !allowedSetting(key) {
-			continue
-		}
-		switch value := value.(type) {
-		case string:
-			if key == "notification_telegram_token" && value == "••••••••" {
-				delete(v, key)
-				continue
-			}
-			current[key] = value
-		case bool:
-			current[key] = strconv.FormatBool(value)
-		case float64:
-			if value != float64(int(value)) {
-				fail(w, 400, "invalid_setting", "数值设置必须是整数")
-				return
-			}
-			current[key] = strconv.Itoa(int(value))
-		default:
-			fail(w, 400, "invalid_setting", "设置值类型无效")
-			return
-		}
-	}
-	nextCfg, e := applyStoredSettings(s.scanner.config(), current)
-	if e != nil {
-		fail(w, 400, "invalid_setting", e.Error())
-		return
-	}
-	if e := s.store.saveSettings(v); e != nil {
-		fail(w, 500, "database_error", e.Error())
-		return
-	}
-	if raw, ok := v["gateway_ip"].(string); ok && raw != "" {
-		_ = s.store.ensureCore(raw)
-	}
-	oldInterval := s.scanner.config().ScanInterval
-	s.scanner.UpdateConfig(nextCfg)
-	if nextCfg.ScanInterval != oldInterval {
-		select {
-		case s.intervalUpdates <- nextCfg.ScanInterval:
-		default:
-			select {
-			case <-s.intervalUpdates:
-			default:
-			}
-			s.intervalUpdates <- nextCfg.ScanInterval
-		}
-	}
-	jsonOut(w, 200, map[string]bool{"saved": true})
-}
-func (s *Server) backup(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="meowtopo-backup.zip"`)
-	if e := s.writeBackup(w); e != nil {
-		fail(w, 500, "backup_failed", "数据库检查点创建失败")
-	}
-}
-
-func (s *Server) writeBackup(dst io.Writer) error {
-	s.backupMu.Lock()
-	defer s.backupMu.Unlock()
-	if _, err := s.store.db.Exec(`PRAGMA wal_checkpoint(FULL)`); err != nil {
-		return err
-	}
-	src, err := os.Open(s.store.path)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	z := zip.NewWriter(dst)
-	f, err := z.Create("meowtopo.db")
-	if err == nil {
-		_, err = io.Copy(f, src)
-	}
-	if closeErr := z.Close(); err == nil {
-		err = closeErr
-	}
-	return err
-}
-func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
-	b, e := io.ReadAll(r.Body)
-	if e != nil {
-		fail(w, 400, "invalid_backup", "备份读取失败")
-		return
-	}
-	zr, e := zip.NewReader(bytes.NewReader(b), int64(len(b)))
-	if e != nil {
-		fail(w, 400, "invalid_backup", "备份不是有效 ZIP")
-		return
-	}
-	var db []byte
-	for _, f := range zr.File {
-		if f.Name == "meowtopo.db" && f.UncompressedSize64 <= 64<<20 {
-			rc, _ := f.Open()
-			db, _ = io.ReadAll(rc)
-			rc.Close()
-		}
-	}
-	if len(db) < 16 || string(db[:15]) != "SQLite format 3" {
-		fail(w, 400, "invalid_backup", "备份不含有效数据库")
-		return
-	}
-	tmp := s.store.path + ".restore"
-	if e = os.WriteFile(tmp, db, 0600); e != nil {
-		fail(w, 500, "restore_failed", e.Error())
-		return
-	}
-	test, e := sqlOpenCheck(tmp)
-	if e != nil {
-		os.Remove(tmp)
-		fail(w, 400, "invalid_backup", e.Error())
-		return
-	}
-	test.Close()
-	s.backupMu.Lock()
-	defer s.backupMu.Unlock()
-	s.store.db.Close()
-	previous := s.store.path + ".pre-restore-" + time.Now().UTC().Format("20060102T150405Z")
-	if e = os.Rename(s.store.path, previous); e != nil {
-		fail(w, 500, "restore_failed", e.Error())
-		return
-	}
-	if e = os.Rename(tmp, s.store.path); e != nil {
-		_ = os.Rename(previous, s.store.path)
-		fail(w, 500, "restore_failed", e.Error())
-		return
-	}
-	s.store, e = openStore(filepath.Dir(s.store.path))
-	if e != nil {
-		fail(w, 500, "restore_failed", e.Error())
-		return
-	}
-	s.notifier = newNotifier(s.store)
-	s.scanner.store = s.store
-	s.scanner.notifier = s.notifier
-	jsonOut(w, 200, map[string]string{"status": "restored", "message": "恢复完成"})
-}
-func sqlOpenCheck(p string) (io.Closer, error) {
-	db, e := sql.Open("sqlite", p)
-	if e != nil {
-		return nil, e
-	}
-	var ok string
-	e = db.QueryRow(`PRAGMA integrity_check`).Scan(&ok)
-	if e != nil || ok != "ok" {
-		db.Close()
-		return nil, fmt.Errorf("数据库完整性检查失败")
-	}
-	return db, nil
-}
-func (s *Server) sse(w http.ResponseWriter, r *http.Request) {
-	f, ok := w.(http.Flusher)
-	if !ok {
-		fail(w, 500, "unsupported", "不支持事件流")
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	c := s.events.subscribe()
-	defer s.events.unsubscribe(c)
-	fmt.Fprint(w, "retry: 3000\n\n")
-	f.Flush()
-	for {
-		select {
-		case b := <-c:
-			fmt.Fprintf(w, "data: %s\n\n", b)
-			f.Flush()
-		case <-r.Context().Done():
-			return
-		}
-	}
-}
-func securityHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'")
-		next.ServeHTTP(w, r)
-	})
-}
-func logRequests(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { next.ServeHTTP(w, r) })
 }

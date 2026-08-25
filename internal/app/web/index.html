@@ -1,16 +1,455 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#83c9ad"><title>MeowTopo · 喵拓</title><link rel="stylesheet" href="/style.css"><script defer src="/assets/cytoscape.min.js"></script><script defer src="/app.js"></script><script defer src="/features.js"></script></head>
-<body><div id="app">
-<header class="topbar"><button class="brand plain" id="homeBtn" aria-label="回到拓扑"><span class="logo">M</span><span><b>MeowTopo</b><small>喵拓 · Home Network Topology</small></span></button><div class="stats"><span><i class="dot online"></i><b id="onlineN">0</b> 在线</span><span><i class="dot suspected"></i><b id="suspectN">0</b> 疑似离线</span><span><i class="dot offline"></i><b id="offlineN">0</b> 离线</span><span><b id="totalN">0</b> 设备</span></div><div class="actions"><label class="search"><span>⌕</span><input id="search" placeholder="搜索设备或 IP" aria-label="搜索设备"></label><button id="scanBtn" class="primary">立即扫描</button><button id="manageBtn" class="primary">设备管理</button><button id="activityBtn">运行记录</button><button id="layoutBtn" title="自动布局">自动布局</button><button id="fitBtn" title="适应屏幕">适应</button><button id="themeBtn" title="切换主题">◐</button><button id="settingsBtn">设置</button><button id="accountBtn" class="hidden">账户</button></div></header>
-<main><section id="canvasPage" class="canvas-page"><div id="cy"></div><div class="legend"><span><i class="dot online"></i>在线</span><span><i class="dot suspected"></i>疑似离线</span><span><i class="dot offline"></i>离线</span><span><i class="dot new"></i>新设备</span><span class="muted">虚线为推测连接</span></div><div id="scanProgress" class="progress hidden"><div><b id="progressTitle">正在扫描</b><span id="progressText"></span></div><progress id="progressBar" max="100" value="0"></progress></div><div id="empty" class="empty hidden"><img src="/assets/topo-chan.png" alt="Topo酱" onerror="this.hidden=true"><h2>拓扑还是空的喵</h2><p>完成网络设置并开始第一次扫描，设备会出现在这里。</p><button id="emptySetup" class="primary">开始设置</button></div></section>
-<aside id="drawer" class="drawer"><button class="close plain" id="closeDrawer">×</button><div id="detail"></div></aside></main>
-<div id="toast" role="status"></div>
-</div>
-<dialog id="wizard"><form method="dialog" id="wizardForm"><div class="welcome"><div><div class="brandline"><span class="logo large">M</span><div><h1>MeowTopo <span>喵拓</span></h1><p>Your LAN, connected.</p></div></div><h2>欢迎回家，先认识一下你的网络</h2><p>只扫描你确认的私有网段。MeowTopo 不上传设备信息，也不会自动扫描所有可达网络。</p></div><img src="/assets/topo-chan.png" alt="Topo酱欢迎形象" onerror="this.hidden=true"></div><div id="detectBox" class="detect-box">正在检测网络接口与权限…</div><div class="formgrid"><label>扫描接口<select id="interfaceSelect"></select></label><label>扫描网段<input id="cidrInput" placeholder="例如 192.168.50.0/24" required></label><label>主网关（可留空）<input id="gatewayInput" placeholder="未检测到时可稍后填写"></label><label>自动扫描间隔<select id="intervalInput"><option value="5m">5 分钟</option><option value="15m">15 分钟</option><option value="30m">30 分钟</option><option value="1h">1 小时</option></select></label><label>离线判定次数<input id="thresholdInput" type="number" min="2" max="20" value="3"></label><label class="check"><input id="portScanInput" type="checkbox" checked>探测少量常用端口</label><label class="check"><input id="firstScanInput" type="checkbox" checked>保存后立即扫描</label></div><p id="wizardError" class="error"></p><div class="dialog-actions"><button value="cancel" id="wizardLater">稍后设置</button><button value="default" id="wizardSave" class="primary">保存并进入拓扑</button></div></form></dialog>
-<dialog id="settingsDialog"><form method="dialog" id="settingsForm"><div class="dialog-title"><div><h2>系统设置</h2><p>日常使用通常无需修改，保持默认即可。</p></div></div><div class="tabs"><button type="button" class="active">扫描设置</button><button type="button" id="backupTab">备份与恢复</button><button type="button" id="aboutTab">关于</button></div><div id="settingsMain" class="settings-groups"><section class="settings-group"><div class="settings-group-title"><b>扫描范围</b><small>告诉喵拓要检查哪一段家庭网络</small></div><div class="formgrid"><label>使用的网卡<select id="setInterface"><option value="">自动选择</option></select></label><label>扫描网段<input id="setCIDR"></label><label>家庭主网关<input id="setGateway"></label><label>多久扫描一次<input id="setInterval" placeholder="5m"><small>例如 5m 表示每 5 分钟</small></label></div></section><details class="settings-group advanced-settings"><summary><span><b>高级探测设置</b><small>网络正常时不建议修改</small></span></summary><div class="formgrid"><label>Ping 等待时间<input id="setPingTimeout" placeholder="800ms"></label><label>端口等待时间<input id="setTCPTimeout" placeholder="350ms"></label><label>同时检查数量<input id="setConcurrency" type="number" min="1" max="128"></label><label>连续失败几次算离线<input id="setThreshold" type="number" min="2" max="20"></label><label class="check"><input id="setPortScan" type="checkbox">辅助检查常用端口</label></div></details></div><div id="backupPane" class="hidden pane"><p>备份包含设置、设备、拓扑关系和节点位置。</p><a class="button" href="/api/backup">下载备份</a><label class="button">恢复备份<input id="restoreFile" type="file" accept=".zip" hidden></label></div><div id="aboutPane" class="hidden pane"><h3>MeowTopo · 喵拓</h3><p>轻量级家庭局域网拓扑监控。所有数据默认保存在本机。</p><p class="muted">在没有 SNMP、LLDP 或控制器数据时，连接关系只是逻辑推测，不代表真实物理端口。</p><p id="versionText"></p></div><p id="settingsError" class="error"></p><div class="dialog-actions"><button value="cancel">取消</button><button value="default" id="settingsSave" class="primary">保存设置</button></div></form></dialog>
-<dialog id="manualDialog"><form method="dialog" id="manualForm"><h2>添加手工节点</h2><label>名称<input id="manualName" required></label><label>类型<select id="manualType"><option value="switch">交换机</option><option value="ap">无线 AP</option><option value="router">路由器</option><option value="room">房间</option><option value="unknown">其他</option></select></label><label>备注<textarea id="manualNotes"></textarea></label><div class="dialog-actions"><button value="cancel">取消</button><button id="manualSave" value="default" class="primary">添加</button></div></form></dialog>
-<dialog id="managerDialog"><div class="manager-toolbar"><div class="manager-head"><div><h2>设备</h2><p class="muted">搜索设备，点击一行查看或修改详情。</p></div><button id="managerClose" aria-label="关闭">关闭</button></div><div class="manager-filters"><input id="managerSearch" placeholder="搜索设备名称、IP 或 MAC"><select id="managerStatus"><option value="">所有状态</option><option value="online">在线</option><option value="suspected_offline">疑似离线</option><option value="offline">离线</option><option value="unknown">未知</option></select><select id="managerType"><option value="">所有类型</option></select><select id="managerVisibility"><option value="">显示和隐藏</option><option value="visible">拓扑中显示</option><option value="hidden">已隐藏</option></select></div><div id="managerSummary" class="manager-summary muted"></div><div class="batch-bar"><label class="check"><input id="managerSelectAll" type="checkbox">选择当前结果</label><span id="managerSelected">已选 0 台</span><button data-batch="clear_new">取消新设备标记</button><button data-batch="hide">隐藏</button><button data-batch="unhide">恢复显示</button><select id="batchParent"><option value="">选择上级设备…</option></select><select id="batchConnection"><option value="unknown">未知连接</option><option value="ethernet">网线</option><option value="wifi">Wi-Fi</option><option value="logical">逻辑连接</option><option value="virtual">虚拟连接</option></select><button id="batchParentSave">修改连接</button></div></div><div id="managerList" class="manager-list"></div></dialog>
-<dialog id="activityDialog"><div class="manager-head"><div><span class="page-kicker">ACTIVITY</span><h2>运行记录</h2><p class="muted">最近发生了什么，一眼就能看明白。</p></div><div><button id="activityRefresh">刷新</button><button id="activityClose">返回拓扑</button></div></div><div class="activity-overview"><span><b id="activityEventCount">0</b>次设备变化</span><span><b id="activityScanCount">0</b>次扫描记录</span><span><b id="activityLatestTime">—</b>最近活动</span></div><div class="activity-tabs"><button class="active" data-activity-pane="events">设备上线与离线</button><button data-activity-pane="scans">扫描记录</button></div><div class="activity-columns"><section data-activity-content="scans" class="hidden"><div id="scanHistoryList" class="activity-list"></div></section><section data-activity-content="events"><div id="statusEventList" class="activity-list"></div></section></div></dialog>
-<dialog id="authDialog" class="auth-dialog"><form method="dialog" id="authForm"><div class="auth-brand"><span class="logo large">M</span><div><h1 id="authTitle">登录 MeowTopo</h1><p id="authIntro" class="muted">登录后查看家里的网络状态。</p></div></div><label>用户名<input id="authUsername" autocomplete="username" required maxlength="32"></label><label id="authDisplayLabel" class="hidden">显示名称<input id="authDisplayName" autocomplete="name" maxlength="40"></label><label>密码<input id="authPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="128"></label><label id="authConfirmLabel" class="hidden">确认密码<input id="authConfirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128"></label><p id="authError" class="error"></p><button id="authSubmit" value="default" class="primary auth-submit">登录</button></form></dialog>
-<dialog id="accountDialog"><div class="manager-head"><div><h2>账户与权限</h2><p id="currentAccountText" class="muted"></p></div><button id="accountClose">关闭</button></div><div id="accountAdminPane" class="hidden"><form id="accountCreateForm" class="account-create"><h3>添加家庭成员或朋友</h3><div class="formgrid"><label>用户名<input id="newUsername" required maxlength="32"></label><label>显示名称<input id="newDisplayName" maxlength="40"></label><label>初始密码<input id="newPassword" type="password" required minlength="10" maxlength="128"></label><label class="check"><input id="newAdmin" type="checkbox">设为管理员</label></div><div class="permission-grid"><label class="check"><input id="newCanEdit" type="checkbox">允许修改设备和拓扑</label><label class="check"><input id="newCanScan" type="checkbox">允许执行扫描和探测</label><label class="check"><input id="newCanSettings" type="checkbox">允许修改设置、通知和备份</label></div><button class="primary">创建账户</button><p id="accountCreateError" class="error"></p></form><h3>现有账户</h3><div id="accountList" class="account-list"></div></div><div class="dialog-actions"><button id="logoutBtn">退出登录</button></div></dialog>
-<button id="addBtn" class="fab" title="添加手工节点">＋</button>
-</body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#83c9ad" />
+    <title>MeowTopo · 喵拓</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/components.css" />
+    <link rel="stylesheet" href="/dashboard.css" />
+    <link rel="stylesheet" href="/polish.css" />
+    <link rel="stylesheet" href="/dialogs.css" />
+    <link rel="stylesheet" href="/workspace.css" />
+    <script defer src="/assets/cytoscape.min.js"></script>
+    <script defer src="/app.js"></script>
+    <script defer src="/topology-core.js"></script>
+    <script defer src="/device-core.js"></script>
+    <script defer src="/scan-settings-core.js"></script>
+    <script defer src="/manager-activity-core.js"></script>
+    <script defer src="/device-ui.js"></script>
+    <script defer src="/settings-ui.js"></script>
+    <script defer src="/topology-ui.js"></script>
+    <script defer src="/features.js"></script>
+    <script defer src="/app-bootstrap.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <button class="brand plain" id="homeBtn" aria-label="回到拓扑">
+          <span class="logo">M</span
+          ><span
+            ><b>MeowTopo</b><small>喵拓 · Home Network Topology</small></span
+          >
+        </button>
+        <div class="stats">
+          <span><i class="dot online"></i><b id="onlineN">0</b> 在线</span
+          ><span
+            ><i class="dot suspected"></i><b id="suspectN">0</b> 疑似离线</span
+          ><span><i class="dot offline"></i><b id="offlineN">0</b> 离线</span
+          ><span><b id="totalN">0</b> 设备</span>
+        </div>
+        <div class="actions">
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              id="search"
+              placeholder="搜索设备或 IP"
+              aria-label="搜索设备" /></label
+          ><button id="scanBtn" class="primary">立即扫描</button
+          ><button id="manageBtn" class="primary">设备管理</button
+          ><button id="activityBtn">运行记录</button
+          ><button id="layoutBtn" title="自动布局">自动布局</button
+          ><button id="fitBtn" title="适应屏幕">适应</button
+          ><button id="themeBtn" title="切换主题">◐</button
+          ><button id="settingsBtn">设置</button
+          ><button id="accountBtn" class="hidden">账户</button>
+        </div>
+      </header>
+      <main>
+        <section id="canvasPage" class="canvas-page">
+          <div id="cy"></div>
+          <div class="legend">
+            <span><i class="dot online"></i>在线</span
+            ><span><i class="dot suspected"></i>疑似离线</span
+            ><span><i class="dot offline"></i>离线</span
+            ><span><i class="dot new"></i>新设备</span
+            ><span class="muted">虚线为推测连接</span>
+          </div>
+          <div id="scanProgress" class="progress hidden">
+            <div>
+              <b id="progressTitle">正在扫描</b><span id="progressText"></span>
+            </div>
+            <progress id="progressBar" max="100" value="0"></progress>
+          </div>
+          <div id="empty" class="empty hidden">
+            <img
+              src="/assets/topo-chan.png"
+              alt="Topo酱"
+              onerror="this.hidden=true"
+            />
+            <h2>拓扑还是空的喵</h2>
+            <p>完成网络设置并开始第一次扫描，设备会出现在这里。</p>
+            <button id="emptySetup" class="primary">开始设置</button>
+          </div>
+        </section>
+        <aside id="drawer" class="drawer">
+          <button class="close plain" id="closeDrawer">×</button>
+          <div id="detail"></div>
+        </aside>
+      </main>
+      <div id="toast" role="status"></div>
+    </div>
+    <dialog id="wizard">
+      <form method="dialog" id="wizardForm">
+        <div class="welcome">
+          <div>
+            <div class="brandline">
+              <span class="logo large">M</span>
+              <div>
+                <h1>MeowTopo <span>喵拓</span></h1>
+                <p>Your LAN, connected.</p>
+              </div>
+            </div>
+            <h2>欢迎回家，先认识一下你的网络</h2>
+            <p>
+              只扫描你确认的私有网段。MeowTopo
+              不上传设备信息，也不会自动扫描所有可达网络。
+            </p>
+          </div>
+          <img
+            src="/assets/topo-chan.png"
+            alt="Topo酱欢迎形象"
+            onerror="this.hidden=true"
+          />
+        </div>
+        <div id="detectBox" class="detect-box">正在检测网络接口与权限…</div>
+        <div class="formgrid">
+          <label>扫描接口<select id="interfaceSelect"></select></label
+          ><label
+            >扫描网段<input
+              id="cidrInput"
+              placeholder="例如 192.168.50.0/24"
+              required /></label
+          ><label
+            >主网关（可留空）<input
+              id="gatewayInput"
+              placeholder="未检测到时可稍后填写" /></label
+          ><label
+            >自动扫描间隔<select id="intervalInput">
+              <option value="5m">5 分钟</option>
+              <option value="15m">15 分钟</option>
+              <option value="30m">30 分钟</option>
+              <option value="1h">1 小时</option>
+            </select></label
+          ><label
+            >离线判定次数<input
+              id="thresholdInput"
+              type="number"
+              min="2"
+              max="20"
+              value="3" /></label
+          ><label class="check"
+            ><input
+              id="portScanInput"
+              type="checkbox"
+              checked
+            />探测少量常用端口</label
+          ><label class="check"
+            ><input
+              id="firstScanInput"
+              type="checkbox"
+              checked
+            />保存后立即扫描</label
+          >
+        </div>
+        <p id="wizardError" class="error"></p>
+        <div class="dialog-actions">
+          <button value="cancel" id="wizardLater">稍后设置</button
+          ><button value="default" id="wizardSave" class="primary">
+            保存并进入拓扑
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="settingsDialog">
+      <form method="dialog" id="settingsForm">
+        <div class="dialog-title">
+          <div>
+            <h2>系统设置</h2>
+            <p>日常使用通常无需修改，保持默认即可。</p>
+          </div>
+        </div>
+        <div class="tabs">
+          <button type="button" class="active">扫描设置</button
+          ><button type="button" id="backupTab">备份与恢复</button
+          ><button type="button" id="aboutTab">关于</button>
+        </div>
+        <div id="settingsMain" class="settings-groups">
+          <section class="settings-group">
+            <div class="settings-group-title">
+              <b>扫描范围</b><small>告诉喵拓要检查哪一段家庭网络</small>
+            </div>
+            <div class="formgrid">
+              <label
+                >使用的网卡<select id="setInterface">
+                  <option value="">自动选择</option>
+                </select></label
+              ><label>扫描网段<input id="setCIDR" /></label
+              ><label>家庭主网关<input id="setGateway" /></label
+              ><label
+                >多久扫描一次<input id="setInterval" placeholder="5m" /><small
+                  >例如 5m 表示每 5 分钟</small
+                ></label
+              >
+            </div>
+          </section>
+          <details class="settings-group advanced-settings">
+            <summary>
+              <span
+                ><b>高级探测设置</b><small>网络正常时不建议修改</small></span
+              >
+            </summary>
+            <div class="formgrid">
+              <label
+                >Ping 等待时间<input
+                  id="setPingTimeout"
+                  placeholder="800ms" /></label
+              ><label
+                >端口等待时间<input
+                  id="setTCPTimeout"
+                  placeholder="350ms" /></label
+              ><label
+                >同时检查数量<input
+                  id="setConcurrency"
+                  type="number"
+                  min="1"
+                  max="128" /></label
+              ><label
+                >连续失败几次算离线<input
+                  id="setThreshold"
+                  type="number"
+                  min="2"
+                  max="20" /></label
+              ><label class="check"
+                ><input
+                  id="setPortScan"
+                  type="checkbox"
+                />辅助检查常用端口</label
+              >
+            </div>
+          </details>
+        </div>
+        <div id="backupPane" class="hidden pane">
+          <p>备份包含设置、设备、拓扑关系和节点位置。</p>
+          <a class="button" href="/api/backup">下载备份</a
+          ><label class="button"
+            >恢复备份<input id="restoreFile" type="file" accept=".zip" hidden
+          /></label>
+        </div>
+        <div id="aboutPane" class="hidden pane">
+          <h3>MeowTopo · 喵拓</h3>
+          <p>轻量级家庭局域网拓扑监控。所有数据默认保存在本机。</p>
+          <p class="muted">
+            在没有 SNMP、LLDP
+            或控制器数据时，连接关系只是逻辑推测，不代表真实物理端口。
+          </p>
+          <p id="versionText"></p>
+        </div>
+        <p id="settingsError" class="error"></p>
+        <div class="dialog-actions">
+          <button value="cancel">取消</button
+          ><button value="default" id="settingsSave" class="primary">
+            保存设置
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="manualDialog">
+      <form method="dialog" id="manualForm">
+        <h2>添加手工节点</h2>
+        <label>名称<input id="manualName" required /></label
+        ><label
+          >类型<select id="manualType">
+            <option value="switch">交换机</option>
+            <option value="ap">无线 AP</option>
+            <option value="router">路由器</option>
+            <option value="room">房间</option>
+            <option value="unknown">其他</option>
+          </select></label
+        ><label>备注<textarea id="manualNotes"></textarea></label>
+        <div class="dialog-actions">
+          <button value="cancel">取消</button
+          ><button id="manualSave" value="default" class="primary">添加</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="managerDialog">
+      <div class="manager-toolbar">
+        <div class="manager-head">
+          <div>
+            <h2>设备</h2>
+            <p class="muted">搜索设备，点击一行查看或修改详情。</p>
+          </div>
+          <button id="managerClose" aria-label="关闭">关闭</button>
+        </div>
+        <div class="manager-filters">
+          <input
+            id="managerSearch"
+            placeholder="搜索设备名称、IP 或 MAC"
+          /><select id="managerStatus">
+            <option value="">所有状态</option>
+            <option value="online">在线</option>
+            <option value="suspected_offline">疑似离线</option>
+            <option value="offline">离线</option>
+            <option value="unknown">未知</option></select
+          ><select id="managerType">
+            <option value="">所有类型</option></select
+          ><select id="managerVisibility">
+            <option value="">显示和隐藏</option>
+            <option value="visible">拓扑中显示</option>
+            <option value="hidden">已隐藏</option>
+          </select>
+        </div>
+        <div id="managerSummary" class="manager-summary muted"></div>
+        <div class="batch-bar">
+          <label class="check"
+            ><input id="managerSelectAll" type="checkbox" />选择当前结果</label
+          ><span id="managerSelected">已选 0 台</span
+          ><button data-batch="clear_new">取消新设备标记</button
+          ><button data-batch="hide">隐藏</button
+          ><button data-batch="unhide">恢复显示</button
+          ><select id="batchParent">
+            <option value="">选择上级设备…</option></select
+          ><select id="batchConnection">
+            <option value="unknown">未知连接</option>
+            <option value="ethernet">网线</option>
+            <option value="wifi">Wi-Fi</option>
+            <option value="logical">逻辑连接</option>
+            <option value="virtual">虚拟连接</option></select
+          ><button id="batchParentSave">修改连接</button>
+        </div>
+      </div>
+      <div id="managerList" class="manager-list"></div>
+    </dialog>
+    <dialog id="activityDialog">
+      <div class="manager-head">
+        <div>
+          <span class="page-kicker">ACTIVITY</span>
+          <h2>运行记录</h2>
+          <p class="muted">最近发生了什么，一眼就能看明白。</p>
+        </div>
+        <div>
+          <button id="activityRefresh">刷新</button
+          ><button id="activityClose">返回拓扑</button>
+        </div>
+      </div>
+      <div class="activity-overview">
+        <span><b id="activityEventCount">0</b>次设备变化</span
+        ><span><b id="activityScanCount">0</b>次扫描记录</span
+        ><span><b id="activityLatestTime">—</b>最近活动</span>
+      </div>
+      <div class="activity-tabs">
+        <button class="active" data-activity-pane="events">
+          设备上线与离线</button
+        ><button data-activity-pane="scans">扫描记录</button>
+      </div>
+      <div class="activity-columns">
+        <section data-activity-content="scans" class="hidden">
+          <div id="scanHistoryList" class="activity-list"></div>
+        </section>
+        <section data-activity-content="events">
+          <div id="statusEventList" class="activity-list"></div>
+        </section>
+      </div>
+    </dialog>
+    <dialog id="authDialog" class="auth-dialog">
+      <form method="dialog" id="authForm">
+        <div class="auth-brand">
+          <span class="logo large">M</span>
+          <div>
+            <h1 id="authTitle">登录 MeowTopo</h1>
+            <p id="authIntro" class="muted">登录后查看家里的网络状态。</p>
+          </div>
+        </div>
+        <label
+          >用户名<input
+            id="authUsername"
+            autocomplete="username"
+            required
+            maxlength="32" /></label
+        ><label id="authDisplayLabel" class="hidden"
+          >显示名称<input
+            id="authDisplayName"
+            autocomplete="name"
+            maxlength="40" /></label
+        ><label
+          >密码<input
+            id="authPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+            minlength="10"
+            maxlength="128" /></label
+        ><label id="authConfirmLabel" class="hidden"
+          >确认密码<input
+            id="authConfirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="10"
+            maxlength="128"
+        /></label>
+        <p id="authError" class="error"></p>
+        <button id="authSubmit" value="default" class="primary auth-submit">
+          登录
+        </button>
+      </form>
+    </dialog>
+    <dialog id="accountDialog">
+      <div class="manager-head">
+        <div>
+          <h2>账户与权限</h2>
+          <p id="currentAccountText" class="muted"></p>
+        </div>
+        <button id="accountClose">关闭</button>
+      </div>
+      <div id="accountAdminPane" class="hidden">
+        <form id="accountCreateForm" class="account-create">
+          <h3>添加家庭成员或朋友</h3>
+          <div class="formgrid">
+            <label
+              >用户名<input id="newUsername" required maxlength="32" /></label
+            ><label>显示名称<input id="newDisplayName" maxlength="40" /></label
+            ><label
+              >初始密码<input
+                id="newPassword"
+                type="password"
+                required
+                minlength="10"
+                maxlength="128" /></label
+            ><label class="check"
+              ><input id="newAdmin" type="checkbox" />设为管理员</label
+            >
+          </div>
+          <div class="permission-grid">
+            <label class="check"
+              ><input
+                id="newCanEdit"
+                type="checkbox"
+              />允许修改设备和拓扑</label
+            ><label class="check"
+              ><input
+                id="newCanScan"
+                type="checkbox"
+              />允许执行扫描和探测</label
+            ><label class="check"
+              ><input
+                id="newCanSettings"
+                type="checkbox"
+              />允许修改设置、通知和备份</label
+            >
+          </div>
+          <button class="primary">创建账户</button>
+          <p id="accountCreateError" class="error"></p>
+        </form>
+        <h3>现有账户</h3>
+        <div id="accountList" class="account-list"></div>
+      </div>
+      <div class="dialog-actions"><button id="logoutBtn">退出登录</button></div>
+    </dialog>
+    <button id="addBtn" class="fab" title="添加手工节点">＋</button>
+  </body>
+</html>
