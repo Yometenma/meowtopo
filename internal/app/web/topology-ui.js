@@ -1,5 +1,6 @@
 /* Topology canvas interactions and the workspace's dynamic bindings. */
-let quickLinkSource = null;
+let linkingChild = null;
+let linkGhost = null;
 let mobileSelectionMode = false;
 
 function closeTopologyMenu() {
@@ -71,6 +72,21 @@ function installDirectBoxSelection() {
       const marquee = document.createElement("div");
       marquee.className = "selection-marquee";
       page.appendChild(marquee);
+      const preview = (currentX, currentY) => {
+        const left = Math.min(x, currentX);
+        const right = Math.max(x, currentX);
+        const top = Math.min(y, currentY);
+        const bottom = Math.max(y, currentY);
+        cy.nodes(":visible").forEach((node) => {
+          const position = node.renderedPosition();
+          const inside =
+            position.x >= left &&
+            position.x <= right &&
+            position.y >= top &&
+            position.y <= bottom;
+          node.toggleClass("box-preview", inside);
+        });
+      };
       const move = (moveEvent) => {
         const currentX = moveEvent.clientX - pageRect.left;
         const currentY = moveEvent.clientY - pageRect.top;
@@ -78,12 +94,17 @@ function installDirectBoxSelection() {
         marquee.style.top = `${Math.min(startY, currentY)}px`;
         marquee.style.width = `${Math.abs(currentX - startX)}px`;
         marquee.style.height = `${Math.abs(currentY - startY)}px`;
+        preview(
+          moveEvent.clientX - containerRect.left,
+          moveEvent.clientY - containerRect.top,
+        );
       };
       const finish = (upEvent) => {
         window.removeEventListener("mousemove", move, true);
         window.removeEventListener("mouseup", finish, true);
         const endX = upEvent.clientX - containerRect.left;
         const endY = upEvent.clientY - containerRect.top;
+        cy.nodes(":visible").removeClass("box-preview");
         const left = Math.min(x, endX),
           right = Math.max(x, endX);
         const top = Math.min(y, endY),
@@ -109,26 +130,106 @@ function installDirectBoxSelection() {
   );
 }
 
-async function createQuickConnection(targetID, connectionType) {
-  if (!quickLinkSource || quickLinkSource === targetID) return;
+function cancelParentLink() {
+  linkingChild = null;
+  if (linkGhost) {
+    linkGhost.edge.remove();
+    linkGhost.node.remove();
+    linkGhost = null;
+  }
+  cy.nodes().removeClass("link-source");
+}
+
+function startParentLink(childId) {
+  cancelParentLink();
+  linkingChild = childId;
+  const accent = cssVar("--acc", "#8fe3b8");
+  const child = cy.$id(String(childId));
+  child.addClass("link-source");
+  const ghost = cy.add({
+    group: "nodes",
+    data: { id: "__link-ghost" },
+    position: child.position(),
+  });
+  ghost.style({
+    opacity: 0,
+    width: 1,
+    height: 1,
+    "background-opacity": 0,
+    "border-width": 0,
+  });
+  const edge = cy.add({
+    group: "edges",
+    data: {
+      id: "__link-ghost-edge",
+      source: String(childId),
+      target: "__link-ghost",
+    },
+  });
+  edge.style({
+    "curve-style": "bezier",
+    "line-style": "dashed",
+    "line-color": accent,
+    width: 2,
+    "target-arrow-shape": "triangle",
+    "target-arrow-color": accent,
+    opacity: 0.9,
+  });
+  linkGhost = { node: ghost, edge };
+  const childDevice = devices.find((device) => device.id === childId);
+  toast(`已选择“${nameOf(childDevice)}”，请点击要设为其父级的设备`);
+}
+
+function updateLinkGhost(event) {
+  if (!linkGhost || !cy) return;
+  const rect = document.querySelector("#cy").getBoundingClientRect();
+  const pan = cy.pan();
+  const zoom = cy.zoom();
+  linkGhost.node.position({
+    x: (event.clientX - rect.left - pan.x) / zoom,
+    y: (event.clientY - rect.top - pan.y) / zoom,
+  });
+}
+
+function finishParentLink(parentId, renderedPosition) {
+  const childId = linkingChild;
+  cancelParentLink();
+  const parent = devices.find((device) => device.id === parentId);
+  const menu = document.createElement("div");
+  menu.id = "topologyMenu";
+  menu.className = "topology-menu";
+  menu.innerHTML = `<div class="topology-menu-title">将 ${esc(nameOf(parent))} 设为父级</div><button data-link-type="ethernet">网线连接</button><button data-link-type="wifi">Wi-Fi 连接</button><button data-link-type="logical">逻辑连接</button><button data-link-type="virtual">虚拟连接</button><button data-cancel-link>取消</button>`;
+  const canvasRect = document
+    .querySelector("#canvasPage")
+    .getBoundingClientRect();
+  menu.style.left = `${Math.min(canvasRect.width - 190, Math.max(8, renderedPosition.x + 12))}px`;
+  menu.style.top = `${Math.min(canvasRect.height - 230, Math.max(8, renderedPosition.y + 12))}px`;
+  document.querySelector("#canvasPage").appendChild(menu);
+  menu.querySelectorAll("[data-link-type]").forEach((button) =>
+    button.addEventListener("click", () =>
+      createParentConnection(childId, parentId, button.dataset.linkType),
+    ),
+  );
+  menu
+    .querySelector("[data-cancel-link]")
+    .addEventListener("click", closeTopologyMenu);
+}
+
+async function createParentConnection(childId, parentId, connectionType) {
   try {
-    await api(`/api/devices/${targetID}/connections`, {
+    await api(`/api/devices/${childId}/connections`, {
       method: "POST",
       body: JSON.stringify({
-        parent_id: quickLinkSource,
+        parent_id: parentId,
         connection_type: connectionType,
         port_label: "",
       }),
     });
-    const source = devices.find((device) => device.id === quickLinkSource);
-    const target = devices.find((device) => device.id === targetID);
-    quickLinkSource = null;
-    cy.nodes().removeClass("link-source");
     closeTopologyMenu();
     await refresh();
-    toast(
-      `已连接：${source ? nameOf(source) : "上级设备"} → ${target ? nameOf(target) : "目标设备"}`,
-    );
+    const parent = devices.find((device) => device.id === parentId);
+    const child = devices.find((device) => device.id === childId);
+    toast(`已连接：${nameOf(parent)} → ${nameOf(child)}`);
   } catch (error) {
     toast(error.message);
   }
@@ -141,25 +242,16 @@ function openTopologyMenu(node, renderedPosition) {
   const menu = document.createElement("div");
   menu.id = "topologyMenu";
   menu.className = "topology-menu";
-  const linkChoices =
-    quickLinkSource && quickLinkSource !== id
-      ? `<div class="topology-menu-title">连接到 ${esc(nameOf(devices.find((device) => device.id === id) || { user_name: "此设备" }))}</div><button data-link-type="ethernet">网线连接</button><button data-link-type="wifi">Wi-Fi 连接</button><button data-link-type="logical">逻辑连接</button><button data-link-type="virtual">虚拟连接</button><button data-cancel-link>取消连线</button>`
-      : `${editable ? "<button data-start-link>从此设备开始连线</button>" : ""}<button data-toggle-select>${node.selected() ? "取消选择" : "加入选择"}</button><button data-open-detail>查看详情</button>`;
-  menu.innerHTML = linkChoices;
+  menu.innerHTML = `${editable ? "<button data-set-parent>设置父级</button>" : ""}<button data-toggle-select>${node.selected() ? "取消选择" : "加入选择"}</button><button data-open-detail>查看详情</button>`;
   const canvasRect = document
     .querySelector("#canvasPage")
     .getBoundingClientRect();
   menu.style.left = `${Math.min(canvasRect.width - 190, Math.max(8, renderedPosition.x + 12))}px`;
   menu.style.top = `${Math.min(canvasRect.height - 230, Math.max(8, renderedPosition.y + 12))}px`;
   document.querySelector("#canvasPage").appendChild(menu);
-  menu.querySelector("[data-start-link]")?.addEventListener("click", () => {
-    quickLinkSource = id;
-    cy.nodes().removeClass("link-source");
-    node.addClass("link-source");
+  menu.querySelector("[data-set-parent]")?.addEventListener("click", () => {
     closeTopologyMenu();
-    toast(
-      `已选择“${nameOf(devices.find((device) => device.id === id))}”作为上级，请右键或长按目标设备`,
-    );
+    startParentLink(id);
   });
   menu.querySelector("[data-toggle-select]")?.addEventListener("click", () => {
     node.selected() ? node.unselect() : node.select();
@@ -169,18 +261,6 @@ function openTopologyMenu(node, renderedPosition) {
     closeTopologyMenu();
     openDetail(id);
   });
-  menu.querySelector("[data-cancel-link]")?.addEventListener("click", () => {
-    quickLinkSource = null;
-    cy.nodes().removeClass("link-source");
-    closeTopologyMenu();
-  });
-  menu
-    .querySelectorAll("[data-link-type]")
-    .forEach((button) =>
-      button.addEventListener("click", () =>
-        createQuickConnection(id, button.dataset.linkType),
-      ),
-    );
 }
 
 function openConnectionMenu(edge, renderedPosition) {
@@ -229,14 +309,23 @@ appExtensions.topologyReady = function () {
   cy.style()
     .selector("node:selected")
     .style({
-      "border-width": 5,
+      "border-width": 6,
       "border-color": accent,
       "border-opacity": 1,
       "underlay-color": accent,
-      "underlay-opacity": 0.3,
-      "underlay-padding": 14,
+      "underlay-opacity": 0.5,
+      "underlay-padding": 16,
       opacity: 1,
       "z-index": 20,
+    })
+    .selector("node.box-preview")
+    .style({
+      "border-width": 4,
+      "border-color": accent,
+      "underlay-color": accent,
+      "underlay-opacity": 0.32,
+      "underlay-padding": 12,
+      "z-index": 19,
     })
     .selector("node.link-source")
     .style({
@@ -251,11 +340,16 @@ appExtensions.topologyReady = function () {
     .update();
   cy.off("tap", "node");
   cy.on("tap", "node", (event) => {
+    const id = +event.target.id();
+    if (linkingChild) {
+      if (id !== linkingChild) finishParentLink(id, event.renderedPosition);
+      return;
+    }
     if (mobileSelectionMode) {
       event.target.selected() ? event.target.unselect() : event.target.select();
       return;
     }
-    openDetail(+event.target.id());
+    openDetail(id);
   });
   cy.off("dragfree", "node");
   cy.on("dragfree", "node", (event) => {
@@ -271,11 +365,18 @@ appExtensions.topologyReady = function () {
     openConnectionMenu(event.target, event.renderedPosition),
   );
   cy.on("select unselect", "node", updateSelectionBar);
-  cy.on("tap pan zoom", (event) => {
-    if (event.target === cy) closeTopologyMenu();
+  cy.on("tap", (event) => {
+    if (event.target !== cy) return;
+    closeTopologyMenu();
+    document.querySelector("#drawer").classList.remove("open");
+    if (linkingChild) cancelParentLink();
   });
+  cy.on("pan zoom", () => closeTopologyMenu());
   document
     .querySelector("#cy")
     .addEventListener("contextmenu", (event) => event.preventDefault());
+  document.addEventListener("mousemove", (event) => {
+    if (linkGhost) updateLinkGhost(event);
+  });
   installDirectBoxSelection();
 };

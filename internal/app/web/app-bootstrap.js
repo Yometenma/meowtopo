@@ -48,10 +48,6 @@ function bind() {
       (button) => (button.onclick = () => runBatch(button.dataset.batch)),
     );
   $("#batchParentSave").onclick = () => runBatch("set_parent");
-  $("#layoutBtn").onclick = () =>
-    cy
-      ?.layout({ name: "cose", animate: true, duration: 350, padding: 55 })
-      .run();
   $("#fitBtn").onclick = () => cy?.fit(undefined, 50);
   $("#closeDrawer").onclick = () => $("#drawer").classList.remove("open");
   $("#emptySetup").onclick = wizard;
@@ -162,7 +158,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ensureNotificationUI();
   document.querySelector(".tabs button").onclick = () => showPane("main");
   bind();
-  $("#layoutBtn").onclick = () => runTopologyLayout(true);
+  $("#layoutBtn").onclick = () => tidyTopologyLayout();
   $("#themeBtn").onclick = () => {
     localStorage.theme = document.documentElement.classList.contains("dark")
       ? "light"

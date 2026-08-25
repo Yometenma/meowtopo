@@ -12,7 +12,7 @@ const $ = (s) => document.querySelector(s);
 //   currentAccount   logged-in user; set by authResult()
 //   csrfToken        CSRF token echoed by login/bootstrap/me
 // Also shared (declared where they are used): searchMatches/searchIndex in
-// app-bootstrap.js, quickLinkSource/mobileSelectionMode in topology-ui.js.
+// app-bootstrap.js, linkingChild/mobileSelectionMode in topology-ui.js.
 let cy,
   devices = [],
   connections = [],

@@ -102,23 +102,21 @@ function initCy() {
       {
         selector: "edge",
         style: {
-          "curve-style": "taxi",
-          "taxi-direction": "downward",
-          "taxi-turn": 22,
-          "taxi-turn-min-distance": 12,
-          width: 1.6,
+          "curve-style": "straight",
+          "line-style": "dashed",
+          width: 1.5,
           "line-color": c.muted,
           "target-arrow-shape": "none",
           opacity: 0.55,
         },
       },
       {
-        selector: 'edge[sourceType="inferred"]',
-        style: { "line-style": "dashed", opacity: 0.35 },
+        selector: 'edge[type="wifi"]',
+        style: { "line-color": c.info },
       },
       {
-        selector: 'edge[type="wifi"]',
-        style: { "line-style": "dashed", "line-color": c.info },
+        selector: 'edge[type="virtual"]',
+        style: { "line-color": "#8b7fb8" },
       },
       { selector: 'edge[type="unknown"]', style: { "line-style": "dotted" } },
       {
@@ -126,8 +124,8 @@ function initCy() {
         style: {
           "line-style": "solid",
           "line-color": c.acc,
-          opacity: 0.85,
-          width: 2.4,
+          opacity: 0.9,
+          width: 2.6,
         },
       },
     ],
@@ -161,6 +159,8 @@ function applyTopologyTheme() {
     .style({ "line-color": c.muted })
     .selector('edge[type="wifi"]')
     .style({ "line-color": c.info })
+    .selector('edge[type="virtual"]')
+    .style({ "line-color": "#8b7fb8" })
     .selector('edge[confirmed="true"]')
     .style({ "line-color": c.acc })
     .update();
@@ -317,6 +317,7 @@ function applyIconStyle() {
       "underlay-padding": 9,
     })
     .update();
+  startStatusBreathing();
 }
 function nodeDisplay(d) {
   const name = nameOf(d),
@@ -391,6 +392,76 @@ function runTopologyLayout(animate = false, fitAfter = false) {
   });
   layout.run();
 }
+
+// Gently tidies the current layout: it keeps each node's existing position as
+// the starting point instead of re-arranging from scratch.
+function tidyTopologyLayout() {
+  if (!cy || !cy.nodes().length) return;
+  const layout = cy.layout({
+    name: "cose",
+    randomize: false,
+    animate: true,
+    animationDuration: 420,
+    nodeRepulsion: 5500,
+    idealEdgeLength: 130,
+    edgeElasticity: 90,
+    gravity: 20,
+    numIter: 900,
+    padding: 55,
+    nodeDimensionsIncludeLabels: true,
+  });
+  layout.on("layoutstop", () => {
+    cy.nodes()
+      .filter((n) => !n.locked())
+      .forEach((n) => savePosition(n));
+    cy.fit(undefined, 50);
+  });
+  layout.run();
+}
+
+let statusBreathStop = null;
+
+function stopStatusBreathing() {
+  if (statusBreathStop) {
+    statusBreathStop();
+    statusBreathStop = null;
+  }
+}
+
+// Makes the status underlay rings (online / suspected / offline) pulse softly,
+// like a breathing light.
+function startStatusBreathing() {
+  stopStatusBreathing();
+  if (!cy) return;
+  const statuses = ["online", "suspected_offline", "offline"];
+  const targets = cy.nodes().filter((n) => statuses.includes(n.data("status")));
+  if (!targets.length) return;
+  const base = { online: 0.16, suspected_offline: 0.2, offline: 0.08 };
+  const peak = { online: 0.44, suspected_offline: 0.52, offline: 0.26 };
+  let stopped = false;
+  statusBreathStop = () => {
+    stopped = true;
+    targets.stop();
+    targets.removeStyle("underlay-opacity");
+  };
+  const cycle = (up) => {
+    if (stopped) return;
+    statuses.forEach((status) => {
+      const group = targets.filter(`[status="${status}"]`);
+      if (!group.length) return;
+      group.animate({
+        style: { "underlay-opacity": up ? peak[status] : base[status] },
+        duration: 1400,
+        easing: "ease-in-out",
+      });
+    });
+    setTimeout(() => {
+      if (!stopped) cycle(!up);
+    }, 1400);
+  };
+  cycle(true);
+}
+
 async function refresh(runLayout = false) {
   const t = await api("/api/topology");
   devices = t.devices || [];
@@ -398,6 +469,7 @@ async function refresh(runLayout = false) {
   updateStats();
   if (cy) {
     const had = cy.nodes().length;
+    if (typeof cancelParentLink === "function") cancelParentLink();
     cy.elements().remove();
     cy.add(elements());
     const upgradeLayout = localStorage.meowtopoLayout !== "artwork-v1";
@@ -409,6 +481,7 @@ async function refresh(runLayout = false) {
       devices
         .filter((d) => d.locked)
         .forEach((d) => cy.$id(String(d.id)).lock());
+    startStatusBreathing();
   }
   $("#empty").classList.toggle("hidden", devices.length > 0);
   appExtensions.refreshed();

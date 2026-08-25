@@ -218,8 +218,7 @@ appExtensions.bind = function () {
       return;
     if (event.key === "Escape") {
       closeTopologyMenu();
-      quickLinkSource = null;
-      cy?.nodes().removeClass("link-source");
+      cancelParentLink();
       cy?.nodes().unselect();
       setMobileSelectionMode(false);
     }
