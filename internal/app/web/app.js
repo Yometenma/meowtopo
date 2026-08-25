@@ -78,6 +78,7 @@ function applyAccountPermissions() {
   $("#manageBtn").classList.remove("hidden");
   $("#addBtn").classList.toggle("hidden", !can(permission.edit));
   $("#layoutBtn").classList.toggle("hidden", !can(permission.edit));
+  $("#mobileSelectBtn").classList.toggle("hidden", !can(permission.edit));
   $("#settingsBtn").classList.toggle("hidden", !can(permission.settings));
   document.body.classList.toggle("read-only", !can(permission.edit));
   document.body.classList.toggle("no-scan", !can(permission.scan));

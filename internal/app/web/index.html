@@ -27,21 +27,92 @@
     <script defer src="/features.js"></script>
     <script defer src="/app-bootstrap.js"></script>
   </head>
-  <body>
+  <body class="dashboard-shell">
     <div id="app">
-      <header class="topbar">
+      <aside id="appSidebar" class="app-sidebar">
         <button class="brand plain" id="homeBtn" aria-label="回到拓扑">
           <span class="logo">M</span
           ><span
             ><b>MeowTopo</b><small>喵拓 · Home Network Topology</small></span
           >
         </button>
+        <nav class="sidebar-nav">
+          <button
+            type="button"
+            class="nav-button active"
+            id="overviewNav"
+            data-workspace="overview"
+            aria-label="拓扑总览"
+            aria-current="page"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9 20v-6h6v6" /></svg><span>拓扑总览</span>
+          </button>
+          <button
+            type="button"
+            class="nav-button"
+            id="manageBtn"
+            data-workspace="devices"
+            aria-label="设备管理"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="3" /><path d="M8 21h8m-4-4v4M7 9h.01m4 0h6" /></svg><span>设备管理</span>
+          </button>
+          <button
+            type="button"
+            class="nav-button"
+            id="activityBtn"
+            data-workspace="activity"
+            aria-label="运行记录"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3" /></svg><span>运行记录</span>
+          </button>
+          <button
+            type="button"
+            class="nav-button"
+            id="settingsBtn"
+            data-workspace="settings"
+            aria-label="系统设置"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg><span>系统设置</span>
+          </button>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="sidebar-pulse"></span><span>本地运行中</span>
+        </div>
+      </aside>
+      <header class="topbar">
+        <div class="page-heading" aria-live="polite">
+          <small id="pageEyebrow">家庭网络中心</small>
+          <strong id="pageTitle">网络拓扑</strong>
+        </div>
         <div class="stats">
-          <span><i class="dot online"></i><b id="onlineN">0</b> 在线</span
+          <span
+            class="status-card"
+            data-status="online"
+            tabindex="0"
+            role="button"
+            aria-label="查看在线设备"
+            ><i class="dot online"></i><b id="onlineN">0</b> 在线</span
           ><span
+            class="status-card"
+            data-status="suspected_offline"
+            tabindex="0"
+            role="button"
+            aria-label="查看疑似离线设备"
             ><i class="dot suspected"></i><b id="suspectN">0</b> 疑似离线</span
-          ><span><i class="dot offline"></i><b id="offlineN">0</b> 离线</span
-          ><span><b id="totalN">0</b> 设备</span>
+          ><span
+            class="status-card"
+            data-status="offline"
+            tabindex="0"
+            role="button"
+            aria-label="查看离线设备"
+            ><i class="dot offline"></i><b id="offlineN">0</b> 离线</span
+          ><span
+            class="status-card"
+            data-status=""
+            tabindex="0"
+            role="button"
+            aria-label="查看全部设备"
+            ><b id="totalN">0</b> 设备</span>
         </div>
         <div class="actions">
           <label class="search"
@@ -51,24 +122,50 @@
               placeholder="搜索设备或 IP"
               aria-label="搜索设备" /></label
           ><button id="scanBtn" class="primary">立即扫描</button
-          ><button id="manageBtn" class="primary">设备管理</button
-          ><button id="activityBtn">运行记录</button
-          ><button id="layoutBtn" title="自动布局">自动布局</button
-          ><button id="fitBtn" title="适应屏幕">适应</button
           ><button id="themeBtn" title="切换主题">◐</button
-          ><button id="settingsBtn">设置</button
           ><button id="accountBtn" class="hidden">账户</button>
         </div>
       </header>
       <main>
         <section id="canvasPage" class="canvas-page">
           <div id="cy"></div>
+          <section class="canvas-context" aria-label="拓扑状态">
+            <span class="context-kicker"><i></i> LIVE TOPOLOGY</span>
+            <strong>家庭网络拓扑</strong>
+            <small id="networkHealthText">正在读取网络状态…</small>
+          </section>
+          <div class="canvas-toolbar">
+            <button
+              type="button"
+              id="mobileSelectBtn"
+              class="mobile-select-button hidden"
+              title="选择多个设备"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4" /><path d="M9 9h6v6H9z" /></svg><span>选择</span>
+            </button>
+            <button type="button" id="layoutBtn" title="自动布局">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="12" cy="18" r="2" /><path d="m7.7 7.1 3.2 8.8m5.4-8.8-3.2 8.8M8 6h8" /></svg><span>整理布局</span>
+            </button>
+            <button type="button" id="fitBtn" title="适应屏幕">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5" /></svg><span>适应画布</span>
+            </button>
+            <button type="button" id="canvasHelpBtn" title="查看拓扑操作指南">
+              <b class="help-symbol">?</b><span>使用帮助</span>
+            </button>
+          </div>
+          <div id="selectionBar" class="selection-bar hidden">
+            <b><span id="selectionCount">0</span> 台已选</b
+            ><button type="button" data-align="horizontal">横向对齐</button
+            ><button type="button" data-align="vertical">纵向对齐</button
+            ><button type="button" id="clearSelectionBtn">取消选择</button>
+          </div>
           <div class="legend">
             <span><i class="dot online"></i>在线</span
             ><span><i class="dot suspected"></i>疑似离线</span
             ><span><i class="dot offline"></i>离线</span
             ><span><i class="dot new"></i>新设备</span
-            ><span class="muted">虚线为推测连接</span>
+            ><span class="muted">虚线为推测连接</span
+            ><span class="muted selection-hint">Shift + 拖动框选</span>
           </div>
           <div id="scanProgress" class="progress hidden">
             <div>
@@ -524,6 +621,96 @@
           </button>
         </div>
       </form>
+    </dialog>
+    <dialog
+      id="canvasHelpDialog"
+      class="canvas-help-dialog"
+      aria-labelledby="canvasHelpTitle"
+    >
+      <div class="canvas-help-head">
+        <div>
+          <span class="page-kicker">TOPOLOGY GUIDE</span>
+          <h2 id="canvasHelpTitle">拓扑操作指南</h2>
+          <p>不用切换编辑模式，直接在画布上操作。</p>
+        </div>
+        <button type="button" id="canvasHelpClose">关闭</button>
+      </div>
+      <div class="canvas-help-platforms">
+        <section>
+          <b>Windows</b>
+          <dl>
+            <dt>移动画布</dt>
+            <dd>按住空白处拖动</dd>
+            <dt>缩放</dt>
+            <dd>滚轮</dd>
+            <dt>框选多个</dt>
+            <dd>Shift + 拖动空白处</dd>
+            <dt>快捷操作</dt>
+            <dd>右键设备或连接线</dd>
+            <dt>全选</dt>
+            <dd>Ctrl + A</dd>
+          </dl>
+        </section>
+        <section>
+          <b>macOS</b>
+          <dl>
+            <dt>移动画布</dt>
+            <dd>按住空白处拖动</dd>
+            <dt>缩放</dt>
+            <dd>触控板捏合或滚动</dd>
+            <dt>框选多个</dt>
+            <dd>Shift + 拖动空白处</dd>
+            <dt>快捷操作</dt>
+            <dd>双指点按设备或连接线</dd>
+            <dt>全选</dt>
+            <dd>⌘ + A</dd>
+          </dl>
+        </section>
+        <section>
+          <b>手机与平板</b>
+          <dl>
+            <dt>移动画布</dt>
+            <dd>单指拖动空白处</dd>
+            <dt>缩放</dt>
+            <dd>双指捏合</dd>
+            <dt>选择多个</dt>
+            <dd>点“选择”，再逐个点设备</dd>
+            <dt>快捷操作</dt>
+            <dd>长按设备或连接线</dd>
+            <dt>移动一组</dt>
+            <dd>拖动任意已选设备</dd>
+          </dl>
+        </section>
+      </div>
+      <section class="connection-guide">
+        <h3>连接方式代表什么</h3>
+        <div>
+          <article>
+            <b>网线</b>
+            <p>确认设备之间存在有线连接。</p>
+          </article>
+          <article>
+            <b>Wi-Fi</b>
+            <p>确认设备通过无线网络接入上级。</p>
+          </article>
+          <article>
+            <b>逻辑连接</b>
+            <p>表示流量、路由或服务上的上下级，不宣称真实网线接法。</p>
+          </article>
+          <article>
+            <b>虚拟连接</b>
+            <p>用于虚拟机、容器、虚拟网桥等软件关系。</p>
+          </article>
+          <article>
+            <b>未知连接</b>
+            <p>知道设备有关联，但目前不能确定连接方式。</p>
+          </article>
+          <article>
+            <b>虚线推测</b>
+            <p>由喵拓根据有限信息推测，可由你手动确认或修改。</p>
+          </article>
+        </div>
+      </section>
     </dialog>
     <button id="addBtn" class="fab" title="添加手工节点">＋</button>
   </body>

@@ -193,7 +193,10 @@ appExtensions.bind = function () {
   ensureMaintenanceUI();
   ensureQualityTools();
   ensureVendorDatabaseUI();
-  ensureDashboardChrome();
+  updateDashboardHealth();
+  document.querySelector("#homeBtn").onclick = () => cy?.fit(undefined, 60);
+  document.querySelector("#canvasHelpClose").onclick = () =>
+    document.querySelector("#canvasHelpDialog").close();
   document.querySelector("#mobileSelectBtn").onclick = () =>
     setMobileSelectionMode(!mobileSelectionMode);
   document.querySelector("#canvasHelpBtn").onclick = () =>
