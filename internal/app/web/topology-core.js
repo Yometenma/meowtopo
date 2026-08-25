@@ -102,7 +102,10 @@ function initCy() {
       {
         selector: "edge",
         style: {
-          "curve-style": "straight",
+          "curve-style": "taxi",
+          "taxi-direction": "auto",
+          "taxi-turn": 16,
+          "taxi-turn-min-distance": 12,
           "line-style": "dashed",
           width: 1.5,
           "line-color": c.muted,

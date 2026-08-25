@@ -1,6 +1,7 @@
 /* Topology canvas interactions and the workspace's dynamic bindings. */
 let linkingChild = null;
-let linkGhost = null;
+let linkArrow = null;
+let lastLinkMouse = null;
 let mobileSelectionMode = false;
 
 function closeTopologyMenu() {
@@ -132,63 +133,72 @@ function installDirectBoxSelection() {
 
 function cancelParentLink() {
   linkingChild = null;
-  if (linkGhost) {
-    linkGhost.edge.remove();
-    linkGhost.node.remove();
-    linkGhost = null;
+  if (linkArrow) {
+    linkArrow.svg.remove();
+    linkArrow = null;
   }
+  lastLinkMouse = null;
   cy.nodes().removeClass("link-source");
 }
 
 function startParentLink(childId) {
   cancelParentLink();
   linkingChild = childId;
-  const accent = cssVar("--acc", "#8fe3b8");
-  const child = cy.$id(String(childId));
-  child.addClass("link-source");
-  const ghost = cy.add({
-    group: "nodes",
-    data: { id: "__link-ghost" },
-    position: child.position(),
-  });
-  ghost.style({
-    opacity: 0,
-    width: 1,
-    height: 1,
-    "background-opacity": 0,
-    "border-width": 0,
-  });
-  const edge = cy.add({
-    group: "edges",
-    data: {
-      id: "__link-ghost-edge",
-      source: String(childId),
-      target: "__link-ghost",
-    },
-  });
-  edge.style({
-    "curve-style": "bezier",
-    "line-style": "dashed",
-    "line-color": accent,
-    width: 2,
-    "target-arrow-shape": "triangle",
-    "target-arrow-color": accent,
-    opacity: 0.9,
-  });
-  linkGhost = { node: ghost, edge };
+  const accent = cssVar("--acc", "#3f7a55");
+  cy.$id(String(childId)).addClass("link-source");
+  const container = document.querySelector("#cy");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.style.cssText =
+    "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:15;";
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const marker = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "marker",
+  );
+  marker.setAttribute("id", "linkFollowArrow");
+  marker.setAttribute("markerWidth", "10");
+  marker.setAttribute("markerHeight", "10");
+  marker.setAttribute("refX", "8");
+  marker.setAttribute("refY", "3");
+  marker.setAttribute("orient", "auto");
+  marker.setAttribute("markerUnits", "strokeWidth");
+  const arrowPath = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "path",
+  );
+  arrowPath.setAttribute("d", "M0,0 L0,6 L9,3 z");
+  arrowPath.setAttribute("fill", accent);
+  marker.appendChild(arrowPath);
+  defs.appendChild(marker);
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("stroke", accent);
+  line.setAttribute("stroke-width", "2");
+  line.setAttribute("stroke-dasharray", "6 4");
+  line.setAttribute("marker-end", "url(#linkFollowArrow)");
+  svg.appendChild(defs);
+  svg.appendChild(line);
+  container.appendChild(svg);
+  linkArrow = { svg, line };
   const childDevice = devices.find((device) => device.id === childId);
   toast(`已选择“${nameOf(childDevice)}”，请点击要设为其父级的设备`);
+  updateLinkArrow();
 }
 
-function updateLinkGhost(event) {
-  if (!linkGhost || !cy) return;
+function updateLinkArrow() {
+  if (!linkArrow || !cy || !linkingChild) return;
+  const childNode = cy.$id(String(linkingChild));
+  if (!childNode.length || !lastLinkMouse) return;
+  const pos = childNode.renderedPosition();
+  linkArrow.line.setAttribute("x1", pos.x);
+  linkArrow.line.setAttribute("y1", pos.y);
+  linkArrow.line.setAttribute("x2", lastLinkMouse.x);
+  linkArrow.line.setAttribute("y2", lastLinkMouse.y);
+}
+
+function recordLinkMouse(event) {
   const rect = document.querySelector("#cy").getBoundingClientRect();
-  const pan = cy.pan();
-  const zoom = cy.zoom();
-  linkGhost.node.position({
-    x: (event.clientX - rect.left - pan.x) / zoom,
-    y: (event.clientY - rect.top - pan.y) / zoom,
-  });
+  lastLinkMouse = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  updateLinkArrow();
 }
 
 function finishParentLink(parentId, renderedPosition) {
@@ -371,12 +381,15 @@ appExtensions.topologyReady = function () {
     document.querySelector("#drawer").classList.remove("open");
     if (linkingChild) cancelParentLink();
   });
-  cy.on("pan zoom", () => closeTopologyMenu());
+  cy.on("pan zoom", () => {
+    closeTopologyMenu();
+    updateLinkArrow();
+  });
   document
     .querySelector("#cy")
     .addEventListener("contextmenu", (event) => event.preventDefault());
   document.addEventListener("mousemove", (event) => {
-    if (linkGhost) updateLinkGhost(event);
+    if (linkArrow) recordLinkMouse(event);
   });
   installDirectBoxSelection();
 };
